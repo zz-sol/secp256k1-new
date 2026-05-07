@@ -24,7 +24,8 @@ if [[ -z "$readelf_bin" ]]; then
 fi
 
 allowed_symbols=(
-  # Standard Solana runtime memory syscall emitted by SDK/compiler support code.
+  # Standard Solana runtime syscalls emitted by SDK/compiler support code.
+  sol_log_
   sol_memcpy_
 )
 
