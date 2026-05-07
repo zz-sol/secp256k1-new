@@ -25,6 +25,7 @@ fi
 
 allowed_symbols=(
   # Standard Solana runtime syscalls emitted by SDK/compiler support code.
+  # The crypto syscalls are static calls in this build and must not appear here.
   sol_log_
   sol_memcpy_
 )

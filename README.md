@@ -35,11 +35,3 @@ Keccak-hashed for that signing scheme.
 cargo test
 cargo build-sbf
 ```
-
-## CI
-
-GitHub Actions runs formatting, host tests, an SBF build, and an unresolved
-symbol allowlist check on every push and pull request. The SBF job installs the
-pinned Agave CLI release from `.github/workflows/ci.yml` and uploads
-`target/deploy/secp256k1.so` as a workflow artifact only after the symbol check
-passes.

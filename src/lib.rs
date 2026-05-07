@@ -102,6 +102,7 @@ pub fn verify_ethereum_signature(instruction: VerifyInstruction<'_>) -> ProgramR
 }
 
 pub fn ethereum_address(pubkey: &[u8; SECP256K1_PUBLIC_KEY_LENGTH]) -> [u8; ETH_ADDRESS_LENGTH] {
+    // Ethereum addresses hash the 64-byte uncompressed public key body, without the 0x04 prefix.
     let hash = hash(pubkey);
     let mut address = [0; ETH_ADDRESS_LENGTH];
     address.copy_from_slice(&hash.as_bytes()[12..]);
@@ -132,9 +133,11 @@ mod tests {
             .sign_prehash_recoverable(message_hash.as_bytes())
             .unwrap();
         let signature: [u8; SECP256K1_SIGNATURE_LENGTH] = signature.to_bytes().into();
+        assert!(!is_high_s(&signature));
 
         let verifying_key = signing_key.verifying_key();
         let encoded = verifying_key.to_encoded_point(false);
+        // Drop the SEC1 0x04 prefix; Ethereum hashes only the 64-byte x||y body.
         let pubkey: [u8; SECP256K1_PUBLIC_KEY_LENGTH] =
             encoded.as_bytes()[1..65].try_into().unwrap();
         let address = ethereum_address(&pubkey);
@@ -160,6 +163,18 @@ mod tests {
         let program_id = Pubkey::default();
         let mut instruction = signed_instruction(b"hello secp256k1");
         instruction[ETH_ADDRESS_OFFSET] ^= 1;
+
+        assert_eq!(
+            process_instruction(&program_id, &[], &instruction),
+            Err(ProgramError::InvalidArgument)
+        );
+    }
+
+    #[test]
+    fn rejects_corrupted_signature() {
+        let program_id = Pubkey::default();
+        let mut instruction = signed_instruction(b"hello secp256k1");
+        instruction[SIGNATURE_OFFSET] ^= 1;
 
         assert_eq!(
             process_instruction(&program_id, &[], &instruction),
