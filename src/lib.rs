@@ -193,7 +193,7 @@ pub fn ethereum_address(pubkey: &[u8; SECP256K1_PUBLIC_KEY_LENGTH]) -> [u8; ETH_
 
 fn validate_recovery_id(recovery_id: u8) -> Result<u8, ProgramError> {
     match recovery_id {
-        0..=3 => Ok(recovery_id),
+        0..=1 => Ok(recovery_id),
         _ => Err(ProgramError::InvalidInstructionData),
     }
 }
@@ -364,7 +364,7 @@ mod tests {
 
             assert_eq!(
                 process_instruction(&program_id, &[], &instruction),
-                Err(ProgramError::InvalidArgument)
+                Err(ProgramError::InvalidInstructionData)
             );
         }
     }

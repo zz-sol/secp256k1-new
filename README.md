@@ -37,12 +37,11 @@ Each 11-byte offset record is little-endian and matches Solana's
 ```
 
 This SBF program receives only its own instruction data, so all three
-instruction-index fields must be `0`. The recovery ID is the Solana syscall
-value `0..=3`; Ethereum-style `27`/`28` is not accepted in this wire format.
-The program accepts both low- and high-`s` signatures, while overflowing
-recovery IDs `2`/`3` fail during recovery. For `personal_sign` or typed-data
-workflows, pass the exact bytes that should be Keccak-hashed for that signing
-scheme.
+instruction-index fields must be `0`. The recovery ID must be `0` or `1`;
+overflowing recovery IDs `2`/`3` and Ethereum-style `27`/`28` are rejected in
+this wire format. The program accepts both low- and high-`s` signatures. For
+`personal_sign` or typed-data workflows, pass the exact bytes that should be
+Keccak-hashed for that signing scheme.
 
 ## Build and test
 
