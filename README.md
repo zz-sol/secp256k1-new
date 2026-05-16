@@ -24,10 +24,9 @@ Instruction data is packed as:
 [85..]    message bytes to Keccak-256 hash and verify
 ```
 
-The program rejects high-`s` signatures before recovery to avoid ECDSA
-malleability, and rejects overflowing recovery IDs `2`/`3` and `29`/`30`. For
-`personal_sign` or typed-data workflows, pass the exact bytes that should be
-Keccak-hashed for that signing scheme.
+The program accepts both low- and high-`s` signatures, and rejects overflowing
+recovery IDs `2`/`3` and `29`/`30`. For `personal_sign` or typed-data workflows,
+pass the exact bytes that should be Keccak-hashed for that signing scheme.
 
 ## Build and test
 
