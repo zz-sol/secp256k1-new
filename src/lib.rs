@@ -14,7 +14,9 @@ solana_program_entrypoint::entrypoint!(process_instruction);
 
 #[cfg(all(feature = "custom-panic", target_os = "solana"))]
 #[no_mangle]
-fn custom_panic(_info: &core::panic::PanicInfo<'_>) {}
+fn custom_panic(_info: &core::panic::PanicInfo<'_>) {
+    loop {}
+}
 
 #[cfg(target_os = "solana")]
 #[no_mangle]
