@@ -12,20 +12,15 @@ use {
 #[cfg(not(feature = "no-entrypoint"))]
 solana_program_entrypoint::entrypoint!(process_instruction);
 
-#[cfg(all(feature = "custom-panic", target_os = "solana"))]
-#[no_mangle]
-fn custom_panic(_info: &core::panic::PanicInfo<'_>) {
-    loop {}
-}
-
 #[cfg(target_os = "solana")]
 #[no_mangle]
 pub extern "C" fn abort() -> ! {
     loop {}
 }
 
-const ETH_ADDRESS_LENGTH: usize = 20;
 const RECOVERY_ID_LENGTH: usize = 1;
+const HASHED_PUBKEY_SERIALIZED_SIZE: usize = 20;
+const SECP256K1_PUBKEY_SIZE: usize = SECP256K1_PUBLIC_KEY_LENGTH;
 const SIGNATURE_SERIALIZED_SIZE: usize = SECP256K1_SIGNATURE_LENGTH;
 // Matches Solana's secp256k1 precompile instruction data format:
 // https://docs.rs/solana-secp256k1-program/latest/solana_secp256k1_program/
@@ -37,8 +32,9 @@ const CURRENT_INSTRUCTION_INDEX: u8 = 0;
 const SIGNATURE_WITH_RECOVERY_ID_LENGTH: usize = SIGNATURE_SERIALIZED_SIZE + RECOVERY_ID_LENGTH;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-// Mirrors `solana_secp256k1_program::SecpSignatureOffsets`; fields are decoded
-// manually because Solana programs receive the 11-byte wire format.
+// Mirrors `solana_secp256k1_program::SecpSignatureOffsets`; the SDK type is
+// not used directly because the current crate pulls in `k256`, which does not
+// compile for SBF through `getrandom`.
 struct SecpSignatureOffsets {
     signature_offset: u16,
     signature_instruction_index: u8,
@@ -49,32 +45,45 @@ struct SecpSignatureOffsets {
     message_instruction_index: u8,
 }
 
-impl SecpSignatureOffsets {
-    fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
-        if input.len() != SIGNATURE_OFFSETS_SERIALIZED_SIZE {
-            return Err(ProgramError::InvalidInstructionData);
-        }
-
-        Ok(Self {
-            signature_offset: decode_u16(input, 0),
-            signature_instruction_index: input[2],
-            eth_address_offset: decode_u16(input, 3),
-            eth_address_instruction_index: input[5],
-            message_data_offset: decode_u16(input, 6),
-            message_data_size: decode_u16(input, 8),
-            message_instruction_index: input[10],
-        })
+fn unpack_signature_offsets(input: &[u8]) -> Result<SecpSignatureOffsets, ProgramError> {
+    if input.len() != SIGNATURE_OFFSETS_SERIALIZED_SIZE {
+        return Err(ProgramError::InvalidInstructionData);
     }
 
-    fn references_current_instruction(self) -> bool {
-        self.signature_instruction_index == CURRENT_INSTRUCTION_INDEX
-            && self.eth_address_instruction_index == CURRENT_INSTRUCTION_INDEX
-            && self.message_instruction_index == CURRENT_INSTRUCTION_INDEX
-    }
+    Ok(SecpSignatureOffsets {
+        signature_offset: decode_u16(input, 0)?,
+        signature_instruction_index: get_u8(input, 2)?,
+        eth_address_offset: decode_u16(input, 3)?,
+        eth_address_instruction_index: get_u8(input, 5)?,
+        message_data_offset: decode_u16(input, 6)?,
+        message_data_size: decode_u16(input, 8)?,
+        message_instruction_index: get_u8(input, 10)?,
+    })
 }
 
-fn decode_u16(input: &[u8], index: usize) -> u16 {
-    u16::from_le_bytes([input[index], input[index + 1]])
+// This SBF program currently receives only its own instruction data, so this
+// assumes the secp256k1 instruction is at transaction index 0. Supporting other
+// instruction indices requires a runtime change to expose that data here.
+fn references_current_instruction(offsets: &SecpSignatureOffsets) -> bool {
+    offsets.signature_instruction_index == CURRENT_INSTRUCTION_INDEX
+        && offsets.eth_address_instruction_index == CURRENT_INSTRUCTION_INDEX
+        && offsets.message_instruction_index == CURRENT_INSTRUCTION_INDEX
+}
+
+fn decode_u16(input: &[u8], index: usize) -> Result<u16, ProgramError> {
+    let bytes: [u8; 2] = input
+        .get(index..index + 2)
+        .ok_or(ProgramError::InvalidInstructionData)?
+        .try_into()
+        .map_err(|_| ProgramError::InvalidInstructionData)?;
+    Ok(u16::from_le_bytes(bytes))
+}
+
+fn get_u8(input: &[u8], index: usize) -> Result<u8, ProgramError> {
+    input
+        .get(index)
+        .copied()
+        .ok_or(ProgramError::InvalidInstructionData)
 }
 
 fn get_instruction_data_slice(
@@ -99,7 +108,7 @@ fn iter_signature_offsets(
         if input.len() == 1 {
             return Ok(input[1..1]
                 .chunks_exact(SIGNATURE_OFFSETS_SERIALIZED_SIZE)
-                .map(SecpSignatureOffsets::unpack));
+                .map(unpack_signature_offsets));
         }
 
         return Err(ProgramError::InvalidInstructionData);
@@ -117,12 +126,12 @@ fn iter_signature_offsets(
 
     Ok(all_offsets
         .chunks_exact(SIGNATURE_OFFSETS_SERIALIZED_SIZE)
-        .map(SecpSignatureOffsets::unpack))
+        .map(unpack_signature_offsets))
 }
 
 fn verify_secp256k1_instruction(instruction_data: &[u8]) -> ProgramResult {
     for offsets in iter_signature_offsets(instruction_data)? {
-        verify_ethereum_signature(instruction_data, offsets?)?;
+        verify_signature(instruction_data, &offsets?)?;
     }
 
     Ok(())
@@ -140,11 +149,8 @@ pub fn process_instruction(
     verify_secp256k1_instruction(instruction_data)
 }
 
-fn verify_ethereum_signature(
-    instruction_data: &[u8],
-    offsets: SecpSignatureOffsets,
-) -> ProgramResult {
-    if !offsets.references_current_instruction() {
+fn verify_signature(instruction_data: &[u8], offsets: &SecpSignatureOffsets) -> ProgramResult {
+    if !references_current_instruction(offsets) {
         return Err(ProgramError::InvalidInstructionData);
     }
 
@@ -153,18 +159,18 @@ fn verify_ethereum_signature(
         offsets.signature_offset,
         SIGNATURE_WITH_RECOVERY_ID_LENGTH,
     )?;
-    let signature: &[u8; SIGNATURE_SERIALIZED_SIZE] = signature_with_recovery_id
-        [..SIGNATURE_SERIALIZED_SIZE]
+    let (&recovery_id, signature) = signature_with_recovery_id
+        .split_last()
+        .ok_or(ProgramError::InvalidInstructionData)?;
+    let signature: &[u8; SIGNATURE_SERIALIZED_SIZE] = signature
         .try_into()
         .map_err(|_| ProgramError::InvalidInstructionData)?;
-    let recovery_id = validate_recovery_id(signature_with_recovery_id[SIGNATURE_SERIALIZED_SIZE])?;
-    let expected_eth_address: &[u8; ETH_ADDRESS_LENGTH] = get_instruction_data_slice(
+    let recovery_id = validate_recovery_id(recovery_id)?;
+    let expected_address = get_instruction_data_slice(
         instruction_data,
         offsets.eth_address_offset,
-        ETH_ADDRESS_LENGTH,
-    )?
-    .try_into()
-    .map_err(|_| ProgramError::InvalidInstructionData)?;
+        HASHED_PUBKEY_SERIALIZED_SIZE,
+    )?;
     let message = get_instruction_data_slice(
         instruction_data,
         offsets.message_data_offset,
@@ -175,25 +181,26 @@ fn verify_ethereum_signature(
     let recovered_pubkey = secp256k1_recover(message_hash.as_bytes(), recovery_id, signature)
         .map_err(|_| ProgramError::InvalidArgument)?;
 
-    let recovered_address = ethereum_address(&recovered_pubkey.to_bytes());
-    if &recovered_address != expected_eth_address {
+    let recovered_address = eth_address_from_pubkey(&recovered_pubkey.to_bytes());
+    if recovered_address != expected_address {
         return Err(ProgramError::InvalidArgument);
     }
 
     Ok(())
 }
 
-pub fn ethereum_address(pubkey: &[u8; SECP256K1_PUBLIC_KEY_LENGTH]) -> [u8; ETH_ADDRESS_LENGTH] {
-    // Ethereum addresses hash the 64-byte uncompressed public key body, without the 0x04 prefix.
+pub fn eth_address_from_pubkey(
+    pubkey: &[u8; SECP256K1_PUBKEY_SIZE],
+) -> [u8; HASHED_PUBKEY_SERIALIZED_SIZE] {
     let hash = hash(pubkey);
-    let mut address = [0; ETH_ADDRESS_LENGTH];
+    let mut address = [0; HASHED_PUBKEY_SERIALIZED_SIZE];
     address.copy_from_slice(&hash.as_bytes()[12..]);
     address
 }
 
 fn validate_recovery_id(recovery_id: u8) -> Result<u8, ProgramError> {
     match recovery_id {
-        0..=1 => Ok(recovery_id),
+        0..=3 => Ok(recovery_id),
         _ => Err(ProgramError::InvalidInstructionData),
     }
 }
@@ -205,7 +212,7 @@ mod tests {
     struct SignedPayload<'a> {
         signature: [u8; SIGNATURE_SERIALIZED_SIZE],
         recovery_id: u8,
-        address: [u8; ETH_ADDRESS_LENGTH],
+        address: [u8; HASHED_PUBKEY_SERIALIZED_SIZE],
         message: &'a [u8],
     }
 
@@ -219,9 +226,8 @@ mod tests {
         let verifying_key = signing_key.verifying_key();
         let encoded = verifying_key.to_encoded_point(false);
         // Drop the SEC1 0x04 prefix; Ethereum hashes only the 64-byte x||y body.
-        let pubkey: [u8; SECP256K1_PUBLIC_KEY_LENGTH] =
-            encoded.as_bytes()[1..65].try_into().unwrap();
-        let address = ethereum_address(&pubkey);
+        let pubkey: [u8; SECP256K1_PUBKEY_SIZE] = encoded.as_bytes()[1..65].try_into().unwrap();
+        let address = eth_address_from_pubkey(&pubkey);
 
         SignedPayload {
             signature,
@@ -264,7 +270,7 @@ mod tests {
             write_offsets(
                 &mut instruction[1 + index * SIGNATURE_OFFSETS_SERIALIZED_SIZE
                     ..1 + (index + 1) * SIGNATURE_OFFSETS_SERIALIZED_SIZE],
-                offsets,
+                &offsets,
             );
         }
 
@@ -272,10 +278,10 @@ mod tests {
     }
 
     fn first_offsets(instruction: &[u8]) -> SecpSignatureOffsets {
-        SecpSignatureOffsets::unpack(&instruction[1..DATA_START]).unwrap()
+        unpack_signature_offsets(&instruction[1..DATA_START]).unwrap()
     }
 
-    fn write_offsets(output: &mut [u8], offsets: SecpSignatureOffsets) {
+    fn write_offsets(output: &mut [u8], offsets: &SecpSignatureOffsets) {
         output[0..2].copy_from_slice(&offsets.signature_offset.to_le_bytes());
         output[2] = offsets.signature_instruction_index;
         output[3..5].copy_from_slice(&offsets.eth_address_offset.to_le_bytes());
@@ -353,7 +359,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_overflow_recovery_ids() {
+    fn passes_supported_overflow_recovery_ids_to_recover() {
         let program_id = Pubkey::default();
 
         for recovery_id in [2, 3] {
@@ -364,7 +370,7 @@ mod tests {
 
             assert_eq!(
                 process_instruction(&program_id, &[], &instruction),
-                Err(ProgramError::InvalidInstructionData)
+                Err(ProgramError::InvalidArgument)
             );
         }
     }
@@ -404,7 +410,7 @@ mod tests {
         let mut instruction = signed_instruction(&[b"hello secp256k1"]);
         let mut offsets = first_offsets(&instruction);
         offsets.message_data_size = u16::MAX;
-        write_offsets(&mut instruction[1..DATA_START], offsets);
+        write_offsets(&mut instruction[1..DATA_START], &offsets);
 
         assert_eq!(
             process_instruction(&program_id, &[], &instruction),
