@@ -4,6 +4,10 @@ Secp256k1 signature verification on Solana SBF
 This repository contains a minimal Solana BPF/SBF program that verifies a
 secp256k1 ECDSA signature without adding any new runtime syscalls.
 
+The goal is to migrate the secp256k1 precompile to BPF while emulating its API
+and behavior exactly. The instruction format intentionally follows the
+precompile, including parts that may not be intuitive for general-purpose use.
+
 On-chain verification uses only existing Solana syscalls exposed by the SDK
 crates:
 
