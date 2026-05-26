@@ -1,4 +1,4 @@
-# secp256k1 — on-chain signature verification for Solana
+# secp256k1: on-chain signature verification for Solana
 
 A minimal Solana SBF program that re-verifies secp256k1 ECDSA signatures
 on-chain without adding any new runtime syscalls.
@@ -7,8 +7,8 @@ on-chain without adding any new runtime syscalls.
 
 The goal is to migrate the native [secp256k1 precompile] to SBF so that it can
 be maintained and deployed like any other on-chain program. The instruction
-format is intentionally identical to the precompile — including parts that are
-not intuitive for general-purpose use — so that tools and clients built around
+format is intentionally identical to the precompile, including parts that are
+not intuitive for general-purpose use, so that tools and clients built around
 the precompile require no changes.
 
 Being a regular SBF program also unlocks CPI: another program can invoke this
@@ -27,7 +27,7 @@ Verification relies only on existing Solana runtime syscalls:
 | `sol_keccak256` | `solana_keccak_hasher::hash` |
 | `sol_secp256k1_recover` | `solana_secp256k1_recover::secp256k1_recover` |
 
-The Makefile `build-sbf-secp256k1` target runs `scripts/check-sbf-symbols.sh`
+The `build-sbf-secp256k1` make target runs `scripts/check-sbf-symbols.sh`
 after the build to ensure no unexpected unresolved symbols appear.
 
 ## Instruction format
@@ -41,11 +41,11 @@ after the build to ensure no unexpected unresolved symbols appear.
 Each 11-byte offset record matches `solana_secp256k1_program::SecpSignatureOffsets`:
 
 ```text
-[0..2]    signature_offset        — byte position of 64-byte r‖s + 1-byte recovery id
+[0..2]    signature_offset        - byte position of 64-byte r||s + 1-byte recovery id
 [2]       signature_instruction_index
-[3..5]    eth_address_offset      — byte position of 20-byte Ethereum address
+[3..5]    eth_address_offset      - byte position of 20-byte Ethereum address
 [5]       eth_address_instruction_index
-[6..8]    message_data_offset     — byte position of the raw message
+[6..8]    message_data_offset     - byte position of the raw message
 [8..10]   message_data_size
 [10]      message_instruction_index
 ```
@@ -65,11 +65,12 @@ Each 11-byte offset record matches `solana_secp256k1_program::SecpSignatureOffse
 ### Hashing
 
 The program Keccak-256 hashes `message` before recovering the public key. Pass
-the exact bytes that should be hashed for your signing scheme — for
+the exact bytes that should be hashed for your signing scheme. For
 `personal_sign`, include the `"\x19Ethereum Signed Message:\n{len}"` prefix;
-for EIP-712 typed data, pass the preimage bytes `"\x19\x01" || domain_separator || struct_hash`
-(66 bytes: 2 + 32 + 32) — the program hashes those for you; passing the 32-byte final digest would verify
-`keccak256(digest)`, causing valid typed-data signatures to fail.
+for EIP-712 typed data, pass `"\x19\x01" || domain_separator || struct_hash`
+(66 bytes total). The program hashes those bytes for you. Passing the
+32-byte final digest would verify `keccak256(digest)`, causing valid typed-data
+signatures to fail.
 
 ## Cargo features
 
@@ -89,9 +90,9 @@ pub use solana_secp256k1_program::eth_address_from_pubkey;
 
 ## Build and test
 
-Stable Rust `1.93.1` is pinned in `rust-toolchain.toml`. Some Makefile targets
-additionally require the nightly toolchain `nightly-2026-01-22` (clippy,
-format-check, rustdoc, feature-powerset).
+Stable Rust `1.93.1` is pinned in `rust-toolchain.toml`. Some make targets
+also require the nightly Rust chain `nightly-2026-01-22` (`clippy`,
+`format-check`, `rustdoc`, `feature-powerset`).
 
 ```sh
 # Unit tests (host, no SBF toolchain required)
@@ -103,10 +104,19 @@ cargo build-sbf
 # SBF build + unresolved-symbol check (via Makefile)
 make build-sbf-secp256k1
 
-# Tests with the SBF artifact on PATH (needed for integration tests)
+# Host unit tests, then SBF integration tests via Mollusk
 make test-secp256k1
+
+# Print Mollusk compute-unit measurements for the SBF program
+make cu-secp256k1
 
 # Lint / format
 make clippy-secp256k1
 make format-check-secp256k1
 ```
+
+The Mollusk tests in `tests/mollusk.rs` execute the built
+`target/deploy/secp256k1.so` artifact and report `compute_units_consumed` for
+one-signature and two-signature verification paths. Plain `cargo test` still
+runs the host tests without requiring the SBF Rust chain; the Mollusk tests skip
+themselves unless `cargo test-sbf` sets `SBF_OUT_DIR`.

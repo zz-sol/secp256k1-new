@@ -58,7 +58,6 @@ fn unpack_signature_offsets(input: &[u8]) -> Result<SecpSignatureOffsets, Progra
     })
 }
 
-/// Reads a little-endian `u16` from `input` starting at `index`.
 fn decode_u16(input: &[u8], index: usize) -> Result<u16, ProgramError> {
     let bytes: [u8; 2] = input
         .get(index..index + 2)
@@ -68,7 +67,6 @@ fn decode_u16(input: &[u8], index: usize) -> Result<u16, ProgramError> {
     Ok(u16::from_le_bytes(bytes))
 }
 
-/// Reads a single byte from `input` at `index`.
 fn get_u8(input: &[u8], index: usize) -> Result<u8, ProgramError> {
     input
         .get(index)
@@ -94,7 +92,6 @@ fn get_instruction_data_slice(
         .ok_or(ProgramError::InvalidInstructionData)
 }
 
-/// Returns a fixed-size array reference `&[u8; N]` from `input` at `offset`.
 fn get_instruction_data_array<const N: usize>(
     input: &[u8],
     offset: u16,

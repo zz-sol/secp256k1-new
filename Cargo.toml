@@ -23,6 +23,9 @@ solana-secp256k1-recover = "3.1.1"
 
 [dev-dependencies]
 k256 = "0.13.4"
+mollusk-svm = "0.12.0"
+solana-address = "2.6.0"
+solana-instruction = "3.4.0"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [

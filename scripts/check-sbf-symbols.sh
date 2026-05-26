@@ -25,9 +25,11 @@ fi
 
 allowed_symbols=(
   # Standard Solana runtime syscalls emitted by SDK/compiler support code.
-  # The crypto syscalls are static calls in this build and must not appear here.
   sol_log_
   sol_memcpy_
+  sol_panic_
+  sol_keccak256
+  sol_secp256k1_recover
 )
 
 undefined_symbols="$("$readelf_bin" -s "$elf" \

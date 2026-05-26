@@ -46,10 +46,15 @@ build-sbf-%:
 	bash scripts/check-sbf-symbols.sh target/deploy/secp256k1.so
 
 test-%:
-	SBF_OUT_DIR=$(PWD)/target/deploy cargo test \
-		--locked \
+	cargo test-sbf \
 		--manifest-path $(call make-path,$*)/Cargo.toml \
 		$(ARGS)
+
+cu-secp256k1:
+	cargo test-sbf \
+		--manifest-path Cargo.toml \
+		--test mollusk \
+		-- --nocapture
 
 generate-clients:
 	exit 0
