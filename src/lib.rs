@@ -68,7 +68,7 @@ fn verify_secp256k1_instruction(instruction_data: &[u8]) -> ProgramResult {
     Ok(())
 }
 
-/// Program entrypoint.
+/// Program entry point.
 ///
 /// Expects no accounts and instruction data in the secp256k1 precompile
 /// format. Returns [`ProgramError::InvalidArgument`] if any accounts are
@@ -98,7 +98,7 @@ fn verify_signature(instruction_data: &[u8], offsets: &SecpSignatureOffsets) -> 
     verify_signature_fields(&fields)
 }
 
-/// Performs the cryptographic check for one signature entry.
+/// Performs the signature check for one entry.
 ///
 /// Hashes `fields.message` with Keccak-256, recovers the secp256k1 public key
 /// from the compact signature, derives its Ethereum address, and compares it

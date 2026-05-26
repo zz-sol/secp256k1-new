@@ -1,5 +1,6 @@
 RUST_TOOLCHAIN_NIGHTLY = nightly-2026-01-22
 SOLANA_CLI_VERSION = v3.1.10
+SBF_TEST_ARCH = v2
 
 nightly = +${RUST_TOOLCHAIN_NIGHTLY}
 
@@ -45,13 +46,19 @@ build-sbf-%:
 	cargo build-sbf --manifest-path $(call make-path,$*)/Cargo.toml -- --locked $(ARGS)
 	bash scripts/check-sbf-symbols.sh target/deploy/secp256k1.so
 
-test-%:
-	cargo test-sbf \
+build-test-sbf-%:
+	cargo build-sbf --arch $(SBF_TEST_ARCH) --manifest-path $(call make-path,$*)/Cargo.toml -- --locked $(ARGS)
+	bash scripts/check-sbf-symbols.sh target/deploy/secp256k1.so
+
+test-%: build-test-sbf-%
+	SBF_OUT_DIR=$(PWD)/target/deploy cargo test \
+		--locked \
 		--manifest-path $(call make-path,$*)/Cargo.toml \
 		$(ARGS)
 
-cu-secp256k1:
-	cargo test-sbf \
+cu-secp256k1: build-test-sbf-secp256k1
+	SBF_OUT_DIR=$(PWD)/target/deploy cargo test \
+		--locked \
 		--manifest-path Cargo.toml \
 		--test mollusk \
 		-- --nocapture
