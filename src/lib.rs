@@ -4,10 +4,17 @@ use {
     solana_program_entrypoint::ProgramResult,
     solana_program_error::ProgramError,
     solana_pubkey::Pubkey,
-    solana_secp256k1_recover::{
-        secp256k1_recover, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
+    solana_secp256k1_program::{
+        SecpSignatureOffsets, HASHED_PUBKEY_SERIALIZED_SIZE, SIGNATURE_OFFSETS_SERIALIZED_SIZE,
+        SIGNATURE_SERIALIZED_SIZE,
     },
+    solana_secp256k1_recover::secp256k1_recover,
 };
+
+#[cfg(test)]
+use solana_secp256k1_program::{DATA_START, SECP256K1_PUBKEY_SIZE};
+
+pub use solana_secp256k1_program::eth_address_from_pubkey;
 
 #[cfg(not(feature = "no-entrypoint"))]
 solana_program_entrypoint::entrypoint!(process_instruction);
@@ -19,31 +26,8 @@ pub extern "C" fn abort() -> ! {
 }
 
 const RECOVERY_ID_LENGTH: usize = 1;
-const HASHED_PUBKEY_SERIALIZED_SIZE: usize = 20;
-const SECP256K1_PUBKEY_SIZE: usize = SECP256K1_PUBLIC_KEY_LENGTH;
-const SIGNATURE_SERIALIZED_SIZE: usize = SECP256K1_SIGNATURE_LENGTH;
-// Matches Solana's secp256k1 precompile instruction data format:
-// https://docs.rs/solana-secp256k1-program/latest/solana_secp256k1_program/
-const SIGNATURE_OFFSETS_SERIALIZED_SIZE: usize = 11;
-#[cfg(test)]
-const DATA_START: usize = SIGNATURE_OFFSETS_SERIALIZED_SIZE + 1;
-
 const CURRENT_INSTRUCTION_INDEX: u8 = 0;
 const SIGNATURE_WITH_RECOVERY_ID_LENGTH: usize = SIGNATURE_SERIALIZED_SIZE + RECOVERY_ID_LENGTH;
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-// Mirrors `solana_secp256k1_program::SecpSignatureOffsets`; the SDK type is
-// not used directly because the current crate pulls in `k256`, which does not
-// compile for SBF through `getrandom`.
-struct SecpSignatureOffsets {
-    signature_offset: u16,
-    signature_instruction_index: u8,
-    eth_address_offset: u16,
-    eth_address_instruction_index: u8,
-    message_data_offset: u16,
-    message_data_size: u16,
-    message_instruction_index: u8,
-}
 
 fn unpack_signature_offsets(input: &[u8]) -> Result<SecpSignatureOffsets, ProgramError> {
     if input.len() != SIGNATURE_OFFSETS_SERIALIZED_SIZE {
@@ -187,15 +171,6 @@ fn verify_signature(instruction_data: &[u8], offsets: &SecpSignatureOffsets) -> 
     }
 
     Ok(())
-}
-
-pub fn eth_address_from_pubkey(
-    pubkey: &[u8; SECP256K1_PUBKEY_SIZE],
-) -> [u8; HASHED_PUBKEY_SERIALIZED_SIZE] {
-    let hash = hash(pubkey);
-    let mut address = [0; HASHED_PUBKEY_SERIALIZED_SIZE];
-    address.copy_from_slice(&hash.as_bytes()[12..]);
-    address
 }
 
 fn validate_recovery_id(recovery_id: u8) -> Result<u8, ProgramError> {

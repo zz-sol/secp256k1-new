@@ -478,10 +478,11 @@ version = "0.1.0"
 dependencies = [
  "k256",
  "solana-account-info",
- "solana-keccak-hasher",
+ "solana-keccak-hasher 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-program-entrypoint",
  "solana-program-error",
  "solana-pubkey",
+ "solana-secp256k1-program",
  "solana-secp256k1-recover",
 ]
 
@@ -573,9 +574,9 @@ dependencies = [
  "five8_const",
  "serde",
  "solana-atomic-u64",
- "solana-define-syscall 5.1.0",
+ "solana-define-syscall 5.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-program-error",
- "solana-sanitize",
+ "solana-sanitize 3.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "wincode",
 ]
 
@@ -601,10 +602,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21e14a4f604117f379840956a8fc8695e4c84f5b0ebed192f31f60d9b85d581d"
 
 [[package]]
+name = "solana-define-syscall"
+version = "5.1.0"
+source = "git+https://github.com/anza-xyz/solana-sdk?rev=70ed9d2c654bd1f1181db5295632e17bba208b8b#70ed9d2c654bd1f1181db5295632e17bba208b8b"
+
+[[package]]
 name = "solana-hash"
 version = "4.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1b113239362cee7093bfb250467138f079a2a03673181dc15bff6ccd677912d"
+dependencies = [
+ "five8",
+]
+
+[[package]]
+name = "solana-hash"
+version = "4.3.0"
+source = "git+https://github.com/anza-xyz/solana-sdk?rev=70ed9d2c654bd1f1181db5295632e17bba208b8b#70ed9d2c654bd1f1181db5295632e17bba208b8b"
 dependencies = [
  "five8",
 ]
@@ -617,7 +631,17 @@ checksum = "ed1c0d16d6fdeba12291a1f068cdf0d479d9bff1141bf44afd7aa9d485f65ef8"
 dependencies = [
  "sha3",
  "solana-define-syscall 4.0.1",
- "solana-hash",
+ "solana-hash 4.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "solana-keccak-hasher"
+version = "3.1.0"
+source = "git+https://github.com/anza-xyz/solana-sdk?rev=70ed9d2c654bd1f1181db5295632e17bba208b8b#70ed9d2c654bd1f1181db5295632e17bba208b8b"
+dependencies = [
+ "sha3",
+ "solana-define-syscall 5.1.0 (git+https://github.com/anza-xyz/solana-sdk?rev=70ed9d2c654bd1f1181db5295632e17bba208b8b)",
+ "solana-hash 4.3.0 (git+https://github.com/anza-xyz/solana-sdk?rev=70ed9d2c654bd1f1181db5295632e17bba208b8b)",
 ]
 
 [[package]]
@@ -663,14 +687,40 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dcf09694a0fc14e5ffb18f9b7b7c0f15ecb6eac5b5610bf76a1853459d19daf9"
 
 [[package]]
+name = "solana-sanitize"
+version = "3.0.1"
+source = "git+https://github.com/anza-xyz/solana-sdk?rev=70ed9d2c654bd1f1181db5295632e17bba208b8b#70ed9d2c654bd1f1181db5295632e17bba208b8b"
+
+[[package]]
+name = "solana-secp256k1-program"
+version = "3.0.1"
+source = "git+https://github.com/anza-xyz/solana-sdk?rev=70ed9d2c654bd1f1181db5295632e17bba208b8b#70ed9d2c654bd1f1181db5295632e17bba208b8b"
+dependencies = [
+ "k256",
+ "solana-keccak-hasher 3.1.0 (git+https://github.com/anza-xyz/solana-sdk?rev=70ed9d2c654bd1f1181db5295632e17bba208b8b)",
+ "solana-signature",
+]
+
+[[package]]
 name = "solana-secp256k1-recover"
 version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7c5f18893d62e6c73117dcba48f8f5e3266d90e5ec3d0a0a90f9785adac36c1"
 dependencies = [
  "k256",
- "solana-define-syscall 5.1.0",
+ "solana-define-syscall 5.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
+]
+
+[[package]]
+name = "solana-signature"
+version = "3.4.0"
+source = "git+https://github.com/anza-xyz/solana-sdk?rev=70ed9d2c654bd1f1181db5295632e17bba208b8b#70ed9d2c654bd1f1181db5295632e17bba208b8b"
+dependencies = [
+ "five8",
+ "serde",
+ "solana-sanitize 3.0.1 (git+https://github.com/anza-xyz/solana-sdk?rev=70ed9d2c654bd1f1181db5295632e17bba208b8b)",
+ "wincode",
 ]
 
 [[package]]
