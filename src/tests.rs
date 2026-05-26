@@ -12,6 +12,7 @@ use {
     },
 };
 
+/// Holds all cryptographic material for a single signed message.
 struct SignedPayload<'a> {
     signature: [u8; SIGNATURE_SERIALIZED_SIZE],
     recovery_id: u8,
@@ -19,6 +20,8 @@ struct SignedPayload<'a> {
     message: &'a [u8],
 }
 
+/// Signs `message` with `signing_key` and returns the compact signature,
+/// recovery id, and the corresponding Ethereum address.
 fn signed_payload<'a>(signing_key: &SigningKey, message: &'a [u8]) -> SignedPayload<'a> {
     let message_hash = hash(message);
     let (signature, recovery_id) = signing_key
@@ -40,6 +43,8 @@ fn signed_payload<'a>(signing_key: &SigningKey, message: &'a [u8]) -> SignedPayl
     }
 }
 
+/// Builds a valid secp256k1 instruction buffer containing one entry per
+/// message, all signed by a fixed test key.
 fn signed_instruction(messages: &[&[u8]]) -> Vec<u8> {
     let signing_key = SigningKey::from_slice(&[7; 32]).unwrap();
     let payloads = messages
@@ -80,6 +85,7 @@ fn signed_instruction(messages: &[&[u8]]) -> Vec<u8> {
     instruction
 }
 
+/// Parses and returns the first `SecpSignatureOffsets` entry from `instruction`.
 fn first_offsets(instruction: &[u8]) -> SecpSignatureOffsets {
     iter_signature_offsets(instruction)
         .unwrap()
@@ -88,6 +94,7 @@ fn first_offsets(instruction: &[u8]) -> SecpSignatureOffsets {
         .unwrap()
 }
 
+/// Serializes `offsets` into the 11-byte little-endian wire format in `output`.
 fn write_offsets(output: &mut [u8], offsets: &SecpSignatureOffsets) {
     output[0..2].copy_from_slice(&offsets.signature_offset.to_le_bytes());
     output[2] = offsets.signature_instruction_index;

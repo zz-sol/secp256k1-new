@@ -1,3 +1,16 @@
+//! Parsing helpers for the secp256k1 instruction data wire format.
+//!
+//! The on-wire layout (identical to the native secp256k1 precompile) is:
+//!
+//! ```text
+//! Byte 0             : num_signatures (u8)
+//! Bytes 1 …          : num_signatures × SecpSignatureOffsets (11 bytes each, LE)
+//! Remaining bytes    : raw payload (signature+recovery_id, eth_address, message)
+//! ```
+//!
+//! All offsets inside `SecpSignatureOffsets` are byte positions into the *same*
+//! instruction data buffer.
+
 use {
     solana_program_error::ProgramError,
     solana_secp256k1_program::{
@@ -7,15 +20,28 @@ use {
 };
 
 const RECOVERY_ID_LENGTH: usize = 1;
+/// Total bytes for the compact signature followed by the recovery id byte.
 const SIGNATURE_WITH_RECOVERY_ID_LENGTH: usize = SIGNATURE_SERIALIZED_SIZE + RECOVERY_ID_LENGTH;
 
+/// Borrowed views into the raw cryptographic fields for one signature entry.
+///
+/// All slices point directly into the instruction data buffer, so no copying
+/// is required before passing them to the verification layer.
 pub(crate) struct SignatureFields<'a> {
+    /// 64-byte compact (r || s) secp256k1 signature.
     pub(crate) signature: &'a [u8; SIGNATURE_SERIALIZED_SIZE],
+    /// Recovery id (0–3) needed to reconstruct the public key from the signature.
     pub(crate) recovery_id: u8,
+    /// 20-byte Ethereum address (Keccak-256 of the uncompressed public key, last 20 bytes).
     pub(crate) expected_address: &'a [u8; HASHED_PUBKEY_SERIALIZED_SIZE],
+    /// Raw message bytes that were signed (before hashing).
     pub(crate) message: &'a [u8],
 }
 
+/// Deserializes an 11-byte `SecpSignatureOffsets` record from `input`.
+///
+/// Returns [`ProgramError::InvalidInstructionData`] if `input` is not exactly
+/// [`SIGNATURE_OFFSETS_SERIALIZED_SIZE`] bytes long.
 fn unpack_signature_offsets(input: &[u8]) -> Result<SecpSignatureOffsets, ProgramError> {
     if input.len() != SIGNATURE_OFFSETS_SERIALIZED_SIZE {
         return Err(ProgramError::InvalidInstructionData);
@@ -32,6 +58,7 @@ fn unpack_signature_offsets(input: &[u8]) -> Result<SecpSignatureOffsets, Progra
     })
 }
 
+/// Reads a little-endian `u16` from `input` starting at `index`.
 fn decode_u16(input: &[u8], index: usize) -> Result<u16, ProgramError> {
     let bytes: [u8; 2] = input
         .get(index..index + 2)
@@ -41,6 +68,7 @@ fn decode_u16(input: &[u8], index: usize) -> Result<u16, ProgramError> {
     Ok(u16::from_le_bytes(bytes))
 }
 
+/// Reads a single byte from `input` at `index`.
 fn get_u8(input: &[u8], index: usize) -> Result<u8, ProgramError> {
     input
         .get(index)
@@ -48,6 +76,10 @@ fn get_u8(input: &[u8], index: usize) -> Result<u8, ProgramError> {
         .ok_or(ProgramError::InvalidInstructionData)
 }
 
+/// Returns `input[offset .. offset + length]`, checking bounds on both ends.
+///
+/// `offset` is a `u16` to match the field widths in `SecpSignatureOffsets`;
+/// the arithmetic is promoted to `usize` with overflow protection.
 fn get_instruction_data_slice(
     input: &[u8],
     offset: u16,
@@ -62,6 +94,7 @@ fn get_instruction_data_slice(
         .ok_or(ProgramError::InvalidInstructionData)
 }
 
+/// Returns a fixed-size array reference `&[u8; N]` from `input` at `offset`.
 fn get_instruction_data_array<const N: usize>(
     input: &[u8],
     offset: u16,
@@ -71,6 +104,11 @@ fn get_instruction_data_array<const N: usize>(
         .map_err(|_| ProgramError::InvalidInstructionData)
 }
 
+/// Extracts all cryptographic fields for one signature entry from raw
+/// `instruction_data` using the byte positions in `offsets`.
+///
+/// The recovery id is the byte immediately after the 64-byte signature; it is
+/// validated by [`validate_recovery_id`] before being returned.
 pub(crate) fn get_signature_fields<'a>(
     instruction_data: &'a [u8],
     offsets: &'a SecpSignatureOffsets,
@@ -96,6 +134,15 @@ pub(crate) fn get_signature_fields<'a>(
     })
 }
 
+/// Parses the leading `num_signatures` byte and returns an iterator that yields
+/// one `SecpSignatureOffsets` per entry.
+///
+/// # Special cases
+///
+/// - `num_signatures == 0` is valid only when the buffer is exactly 1 byte
+///   (just the count, no trailing data). Any extra bytes are rejected because
+///   the precompile treats them as malformed.
+/// - Overflow in the total offsets size is rejected via `checked_mul`.
 pub(crate) fn iter_signature_offsets(
     input: &[u8],
 ) -> Result<impl Iterator<Item = Result<SecpSignatureOffsets, ProgramError>> + '_, ProgramError> {
@@ -125,6 +172,9 @@ pub(crate) fn iter_signature_offsets(
         .map(unpack_signature_offsets))
 }
 
+/// Accepts recovery ids 0–3 (the four possible y-parity / overflow combinations
+/// defined by SEC 1). Values 4–255 (including the legacy Ethereum 27/28 offset)
+/// are explicitly rejected rather than silently truncated.
 fn validate_recovery_id(recovery_id: u8) -> Result<u8, ProgramError> {
     match recovery_id {
         0..=3 => Ok(recovery_id),
