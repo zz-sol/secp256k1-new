@@ -19,7 +19,7 @@ public key hashes to the supplied Ethereum-style address.
 
 ## Instruction layout
 
-Instruction data uses Solana's secp256k1 precompile layout:
+Instruction data uses the Solana secp256k1 precompile layout:
 
 ```text
 [0]                         number of signatures to verify
@@ -27,7 +27,7 @@ Instruction data uses Solana's secp256k1 precompile layout:
 [1 + 11 * count..]          payload bytes referenced by the offset records
 ```
 
-Each 11-byte offset record is little-endian and matches Solana's
+Each 11-byte offset record is little-endian and matches the Solana
 `SecpSignatureOffsets` format:
 
 ```text
