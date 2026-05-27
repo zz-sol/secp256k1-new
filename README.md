@@ -1,4 +1,4 @@
-# secp256k1: on-chain signature verification for Solana
+# solana-secp256k1-program: on-chain signature verification for Solana
 
 A minimal Solana SBF program that re-verifies secp256k1 ECDSA signatures
 on-chain without adding any new runtime syscalls.
@@ -35,7 +35,8 @@ Verification relies only on existing Solana runtime syscalls:
 [1 + 11*N ..]         payload: signatures, addresses, messages (order flexible)
 ```
 
-Each 11-byte offset record matches `solana_secp256k1_program::SecpSignatureOffsets`:
+Each 11-byte offset record matches `SecpSignatureOffsets` from the upstream
+`solana-secp256k1-program` SDK crate:
 
 ```text
 [0..2]    signature_offset        - byte position of 64-byte r||s + 1-byte recovery id
@@ -82,7 +83,7 @@ signatures to fail.
 convenience:
 
 ```rust
-pub use solana_secp256k1_program::eth_address_from_pubkey;
+use solana_secp256k1_program::eth_address_from_pubkey;
 ```
 
 ## Build and test
@@ -93,27 +94,28 @@ also require the nightly Rust chain `nightly-2026-01-22` (`clippy`,
 
 ```sh
 # Unit tests (host, no SBF toolchain required)
-cargo test
+cargo test --manifest-path program/Cargo.toml
 
 # SBF build only
-cargo build-sbf
+cargo build-sbf --manifest-path program/Cargo.toml
 
 # SBF build via Makefile
-make build-sbf-secp256k1
+make build-sbf-program
 
 # Host unit tests, then SBF integration tests via Mollusk
-make test-secp256k1
+make test-program
 
 # Print Mollusk compute-unit measurements for the SBF program
-make cu-secp256k1
+make cu-program
 
 # Lint / format
-make clippy-secp256k1
-make format-check-secp256k1
+make clippy-program
+make format-check-program
 ```
 
-The Mollusk tests in `tests/mollusk.rs` execute the built
-`target/deploy/secp256k1.so` artifact and report `compute_units_consumed` for
-one-signature and two-signature verification paths. Plain `cargo test` still
-runs the host tests without requiring the SBF Rust chain; the Mollusk tests skip
-themselves unless `cargo test-sbf` sets `SBF_OUT_DIR`.
+The Mollusk tests in `program/tests/mollusk.rs` execute the built
+`target/deploy/solana_secp256k1_program.so` artifact and report
+`compute_units_consumed` for one-signature and two-signature verification
+paths. Plain `cargo test --manifest-path program/Cargo.toml` still runs the
+host tests without requiring the SBF Rust chain; the Mollusk tests skip
+themselves unless `SBF_OUT_DIR` is set.

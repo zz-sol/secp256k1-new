@@ -7,7 +7,7 @@
 //! # Instruction format
 //!
 //! The instruction data mirrors the layout consumed by the native secp256k1
-//! precompile (see [`solana_secp256k1_program`]):
+//! precompile (see the upstream `solana-secp256k1-program` SDK crate):
 //!
 //! ```text
 //! [num_signatures: u8]
@@ -25,14 +25,14 @@ use solana_keccak_hasher::hash;
 use solana_program_entrypoint::ProgramResult;
 use solana_program_error::ProgramError;
 use solana_pubkey::Pubkey;
-use solana_secp256k1_program::SecpSignatureOffsets;
+use solana_secp256k1_program_sdk::SecpSignatureOffsets;
 use solana_secp256k1_recover::secp256k1_recover;
 
 mod instruction_data;
 
 use instruction_data::{get_signature_fields, iter_signature_offsets, SignatureFields};
 
-pub use solana_secp256k1_program::eth_address_from_pubkey;
+pub use solana_secp256k1_program_sdk::eth_address_from_pubkey;
 
 #[cfg(not(feature = "no-entrypoint"))]
 solana_program_entrypoint::entrypoint!(process_instruction);

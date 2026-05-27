@@ -7,8 +7,8 @@ on:
     branches: [main]
 
 env:
-  SBPF_PROGRAM_PACKAGES: "['secp256k1']"
-  RUST_PACKAGES: "['secp256k1']"
+  SBPF_PROGRAM_PACKAGES: "['program']"
+  RUST_PACKAGES: "['program']"
 
 jobs:
   set_env:

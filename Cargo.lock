@@ -1693,23 +1693,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "secp256k1"
-version = "0.1.0"
-dependencies = [
- "k256",
- "mollusk-svm",
- "solana-account-info",
- "solana-address 2.6.0",
- "solana-instruction",
- "solana-keccak-hasher 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-program-entrypoint",
- "solana-program-error",
- "solana-pubkey 4.2.0",
- "solana-secp256k1-program",
- "solana-secp256k1-recover",
-]
-
-[[package]]
 name = "semver"
 version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2486,6 +2469,23 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "solana-secp256k1-program"
+version = "0.1.0"
+dependencies = [
+ "k256",
+ "mollusk-svm",
+ "solana-account-info",
+ "solana-address 2.6.0",
+ "solana-instruction",
+ "solana-keccak-hasher 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-program-entrypoint",
+ "solana-program-error",
+ "solana-pubkey 4.2.0",
+ "solana-secp256k1-program 3.0.1",
+ "solana-secp256k1-recover",
 ]
 
 [[package]]

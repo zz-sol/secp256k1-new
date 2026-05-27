@@ -1,0 +1,30 @@
+[package]
+name = "solana-secp256k1-program"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+custom-heap = []
+no-entrypoint = []
+
+[dependencies]
+solana-account-info = { workspace = true }
+solana-keccak-hasher = { workspace = true }
+solana-program-entrypoint = { workspace = true }
+solana-program-error = { workspace = true }
+solana-pubkey = { workspace = true }
+solana-secp256k1-program-sdk = { workspace = true }
+solana-secp256k1-recover = { workspace = true }
+
+[dev-dependencies]
+k256 = { workspace = true }
+mollusk-svm = { workspace = true }
+solana-address = { workspace = true }
+solana-instruction = { workspace = true }
+
+[lints]
+workspace = true

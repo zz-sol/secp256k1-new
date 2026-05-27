@@ -13,7 +13,7 @@
 
 use {
     solana_program_error::ProgramError,
-    solana_secp256k1_program::{
+    solana_secp256k1_program_sdk::{
         SecpSignatureOffsets, HASHED_PUBKEY_SERIALIZED_SIZE, SIGNATURE_OFFSETS_SERIALIZED_SIZE,
         SIGNATURE_SERIALIZED_SIZE,
     },
