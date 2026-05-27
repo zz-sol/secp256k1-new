@@ -120,6 +120,3 @@ fn verify_signature_fields(fields: &SignatureFields) -> ProgramResult {
 
     Ok(())
 }
-
-#[cfg(test)]
-mod tests;

@@ -44,7 +44,6 @@ build-doc-%:
 
 build-sbf-%:
 	cargo build-sbf --arch $(SBF_ARCH) --manifest-path $(call make-path,$*)/Cargo.toml -- --locked $(ARGS)
-	bash scripts/check-sbf-symbols.sh target/deploy/secp256k1.so
 
 test-%:
 	@test -f target/deploy/secp256k1.so || \

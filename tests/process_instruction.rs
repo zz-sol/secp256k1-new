@@ -1,12 +1,11 @@
 use {
-    crate::process_instruction,
     common::{first_offsets, signed_instruction, write_offsets},
+    secp256k1::process_instruction,
     solana_program_error::ProgramError,
     solana_pubkey::Pubkey,
     solana_secp256k1_program::{DATA_START, SIGNATURE_SERIALIZED_SIZE},
 };
 
-#[path = "../tests/common/mod.rs"]
 mod common;
 
 #[test]

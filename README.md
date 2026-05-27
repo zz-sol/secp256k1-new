@@ -27,9 +27,6 @@ Verification relies only on existing Solana runtime syscalls:
 | `sol_keccak256` | `solana_keccak_hasher::hash` |
 | `sol_secp256k1_recover` | `solana_secp256k1_recover::secp256k1_recover` |
 
-The `build-sbf-secp256k1` make target runs `scripts/check-sbf-symbols.sh`
-after the build to ensure no unexpected unresolved symbols appear.
-
 ## Instruction format
 
 ```text
@@ -101,7 +98,7 @@ cargo test
 # SBF build only
 cargo build-sbf
 
-# SBF build + unresolved-symbol check (via Makefile)
+# SBF build via Makefile
 make build-sbf-secp256k1
 
 # Host unit tests, then SBF integration tests via Mollusk
