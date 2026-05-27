@@ -1,6 +1,7 @@
 use {
     k256::ecdsa::SigningKey,
     solana_keccak_hasher::hash,
+    solana_secp256k1_program::unpack_signature_offsets,
     solana_secp256k1_program_sdk::{
         eth_address_from_pubkey, SecpSignatureOffsets, HASHED_PUBKEY_SERIALIZED_SIZE,
         SECP256K1_PUBKEY_SIZE, SIGNATURE_OFFSETS_SERIALIZED_SIZE, SIGNATURE_SERIALIZED_SIZE,
@@ -82,20 +83,7 @@ pub(crate) fn signed_instruction(messages: &[&[u8]]) -> Vec<u8> {
 
 /// Parses and returns the first `SecpSignatureOffsets` entry from `instruction`.
 pub(crate) fn first_offsets(instruction: &[u8]) -> SecpSignatureOffsets {
-    read_offsets(&instruction[1..1 + SIGNATURE_OFFSETS_SERIALIZED_SIZE])
-}
-
-/// Deserializes the 11-byte little-endian wire format.
-fn read_offsets(input: &[u8]) -> SecpSignatureOffsets {
-    SecpSignatureOffsets {
-        signature_offset: u16::from_le_bytes(input[0..2].try_into().unwrap()),
-        signature_instruction_index: input[2],
-        eth_address_offset: u16::from_le_bytes(input[3..5].try_into().unwrap()),
-        eth_address_instruction_index: input[5],
-        message_data_offset: u16::from_le_bytes(input[6..8].try_into().unwrap()),
-        message_data_size: u16::from_le_bytes(input[8..10].try_into().unwrap()),
-        message_instruction_index: input[10],
-    }
+    unpack_signature_offsets(&instruction[1..1 + SIGNATURE_OFFSETS_SERIALIZED_SIZE]).unwrap()
 }
 
 /// Serializes `offsets` into the 11-byte little-endian wire format in `output`.

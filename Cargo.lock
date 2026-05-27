@@ -2486,6 +2486,7 @@ dependencies = [
  "solana-pubkey 4.2.0",
  "solana-secp256k1-program 3.0.1",
  "solana-secp256k1-recover",
+ "solana-zero-copy",
 ]
 
 [[package]]
@@ -2801,6 +2802,12 @@ dependencies = [
  "solana-instruction-error",
  "solana-sanitize 3.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "solana-zero-copy"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ea15126ebdc7e270c50d43884369af9f51d2308156d46a18e351522a164844d"
 
 [[package]]
 name = "spki"

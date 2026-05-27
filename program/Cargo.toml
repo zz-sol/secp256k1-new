@@ -6,11 +6,6 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-[features]
-default = []
-custom-heap = []
-no-entrypoint = []
-
 [dependencies]
 solana-account-info = { workspace = true }
 solana-keccak-hasher = { workspace = true }
@@ -19,6 +14,7 @@ solana-program-error = { workspace = true }
 solana-pubkey = { workspace = true }
 solana-secp256k1-program-sdk = { workspace = true }
 solana-secp256k1-recover = { workspace = true }
+solana-zero-copy = { workspace = true }
 
 [dev-dependencies]
 k256 = { workspace = true }

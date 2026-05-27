@@ -1,6 +1,6 @@
 RUST_TOOLCHAIN_NIGHTLY = nightly-2026-01-22
 SOLANA_CLI_VERSION = v3.1.10
-SBF_ARCH = v2
+SBF_ARCH = v3
 PROGRAM_SO = solana_secp256k1_program.so
 
 nightly = +${RUST_TOOLCHAIN_NIGHTLY}

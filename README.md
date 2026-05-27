@@ -1,6 +1,6 @@
 # solana-secp256k1-program: on-chain signature verification for Solana
 
-A minimal Solana SBF program that re-verifies secp256k1 ECDSA signatures
+A minimal Solana SBF program that verifies secp256k1 ECDSA signatures
 on-chain without adding any new runtime syscalls.
 
 ## Motivation
@@ -16,7 +16,7 @@ one and act on the explicit pass/fail result, rather than relying on
 `sysvar::instructions` inspection to confirm a parallel precompile instruction
 succeeded.
 
-[secp256k1 precompile]: https://docs.solanalabs.com/runtime/programs#secp256k1-program
+[secp256k1 precompile]: https://solana.com/docs/core/programs/precompiles#verify-secp256k1-recovery
 
 ## Syscalls used
 
@@ -51,8 +51,8 @@ Each 11-byte offset record matches `SecpSignatureOffsets` from the upstream
 ### Constraints
 
 - **All instruction-index fields must be `0`.** An SBF program receives only
-  its own instruction data; cross-instruction references require a future
-  runtime change.
+  its own instruction data; cross-instruction references require future ABI and
+  runtime support.
 - **Recovery id must be `0`–`3`.** Ethereum-style `27`/`28` offsets are
   rejected at the wire level.
 - **Zero-signature payloads** (`count == 0`) are accepted only when the buffer
@@ -70,22 +70,6 @@ for EIP-712 typed data, pass `"\x19\x01" || domain_separator || struct_hash`
 32-byte final digest would verify `keccak256(digest)`, causing valid typed-data
 signatures to fail.
 
-## Cargo features
-
-| Feature | Default | Description |
-|---|---|---|
-| `no-entrypoint` | off | Omits the program entrypoint; use when embedding the crate in another program or in tests that call `process_instruction` directly. |
-| `custom-heap` | off | Reserved for callers that provide a custom heap allocator. |
-
-## Public API
-
-`eth_address_from_pubkey` is re-exported from `solana_secp256k1_program` for
-convenience:
-
-```rust
-use solana_secp256k1_program::eth_address_from_pubkey;
-```
-
 ## Build and test
 
 Stable Rust `1.93.1` is pinned in `rust-toolchain.toml`. Some make targets
@@ -97,7 +81,7 @@ also require the nightly Rust chain `nightly-2026-01-22` (`clippy`,
 cargo test --manifest-path program/Cargo.toml
 
 # SBF build only
-cargo build-sbf --manifest-path program/Cargo.toml
+cargo build-sbf --arch v3 --manifest-path program/Cargo.toml
 
 # SBF build via Makefile
 make build-sbf-program

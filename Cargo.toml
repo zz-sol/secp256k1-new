@@ -5,7 +5,7 @@ resolver = "2"
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
     'cfg(target_os, values("solana"))',
-    'cfg(feature, values("custom-panic"))',
+    'cfg(feature, values("custom-heap", "custom-panic"))',
 ] }
 
 [workspace.dependencies]
@@ -21,3 +21,4 @@ solana-pubkey = "4.1.0"
 # todo: use crate.io version when it is published
 solana-secp256k1-program-sdk = { package = "solana-secp256k1-program", git = "https://github.com/anza-xyz/solana-sdk", rev = "70ed9d2c654bd1f1181db5295632e17bba208b8b", default-features = false }
 solana-secp256k1-recover = "3.1.1"
+solana-zero-copy = "1.1.1"
