@@ -185,7 +185,7 @@ fn serialize_signature_offsets(
 
 /// Creates an Ethereum address from a 64-byte secp256k1 public key body.
 ///
-/// The input must be the raw `x || y` bytes without the SEC1 `0x04` prefix.
+/// The input must be the raw `x || y` bytes without the SEC 1 `0x04` prefix.
 pub fn eth_address_from_pubkey(
     pubkey: &[u8; SECP256K1_PUBKEY_SIZE],
 ) -> [u8; HASHED_PUBKEY_SERIALIZED_SIZE] {
@@ -196,9 +196,9 @@ pub fn eth_address_from_pubkey(
     addr
 }
 
-/// Creates an Ethereum address from a SEC1 uncompressed public key.
+/// Creates an Ethereum address from a SEC 1 uncompressed public key.
 ///
-/// Returns `None` unless `pubkey` is a 65-byte uncompressed SEC1 point with a
+/// Returns `None` unless `pubkey` is a 65-byte uncompressed SEC 1 point with a
 /// leading `0x04` tag.
 pub fn eth_address_from_sec1_pubkey(
     pubkey: &[u8; SECP256K1_UNCOMPRESSED_PUBKEY_SIZE],
