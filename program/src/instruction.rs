@@ -74,6 +74,31 @@ fn signature_error(message: impl Into<String>) -> Error {
 ))]
 /// Builds a single-signature secp256k1 instruction.
 ///
+/// This preserves the upstream SDK helper API by returning [`Instruction`]
+/// directly. For fallible construction with explicit overflow and recovery-id
+/// errors, use [`try_new_secp256k1_instruction_with_signature`].
+///
+/// # Panics
+///
+/// Panics if `message_arr` cannot be represented in the 16-bit wire size
+/// field, if any offset cannot be represented in the 16-bit wire offset fields,
+/// or if `recovery_id` is not in `0..=3`.
+pub fn new_secp256k1_instruction_with_signature(
+    message_arr: &[u8],
+    signature: &[u8; SIGNATURE_SERIALIZED_SIZE],
+    recovery_id: u8,
+    eth_address: &[u8; HASHED_PUBKEY_SERIALIZED_SIZE],
+) -> Instruction {
+    try_new_secp256k1_instruction_with_signature(message_arr, signature, recovery_id, eth_address)
+        .expect("invalid secp256k1 instruction inputs")
+}
+
+#[cfg(all(
+    feature = "bincode",
+    not(any(target_os = "solana", target_arch = "bpf"))
+))]
+/// Builds a single-signature secp256k1 instruction with checked inputs.
+///
 /// Returns an error if `message_arr` cannot be represented in the 16-bit wire
 /// size field, if any offset cannot be represented in the 16-bit wire offset
 /// fields, or if `recovery_id` is not in `0..=3`.
@@ -82,7 +107,7 @@ fn signature_error(message: impl Into<String>) -> Error {
 /// New signatures normally use `0` or `1`; overflowing `2`/`3` signatures are
 /// passed through to recovery rather than rejected during instruction
 /// construction.
-pub fn new_secp256k1_instruction_with_signature(
+pub fn try_new_secp256k1_instruction_with_signature(
     message_arr: &[u8],
     signature: &[u8; SIGNATURE_SERIALIZED_SIZE],
     recovery_id: u8,
@@ -255,7 +280,7 @@ mod tests {
         let eth_address = [2; HASHED_PUBKEY_SERIALIZED_SIZE];
 
         for recovery_id in [4, 27, u8::MAX] {
-            assert!(new_secp256k1_instruction_with_signature(
+            assert!(try_new_secp256k1_instruction_with_signature(
                 b"message",
                 &signature,
                 recovery_id,
@@ -275,7 +300,7 @@ mod tests {
         let eth_address = [2; HASHED_PUBKEY_SERIALIZED_SIZE];
 
         for recovery_id in 0..=3 {
-            assert!(new_secp256k1_instruction_with_signature(
+            assert!(try_new_secp256k1_instruction_with_signature(
                 b"message",
                 &signature,
                 recovery_id,
@@ -296,19 +321,35 @@ mod tests {
         let max_message = vec![3; u16::MAX as usize];
         let oversized_message = vec![3; u16::MAX as usize + 1];
 
-        assert!(new_secp256k1_instruction_with_signature(
+        assert!(try_new_secp256k1_instruction_with_signature(
             &max_message,
             &signature,
             0,
             &eth_address
         )
         .is_ok());
-        assert!(new_secp256k1_instruction_with_signature(
+        assert!(try_new_secp256k1_instruction_with_signature(
             &oversized_message,
             &signature,
             0,
             &eth_address
         )
         .is_err());
+    }
+
+    #[cfg(all(
+        feature = "bincode",
+        not(any(target_os = "solana", target_arch = "bpf"))
+    ))]
+    #[test]
+    fn test_instruction_builder_keeps_legacy_return_type() {
+        let signature = [1; SIGNATURE_SERIALIZED_SIZE];
+        let eth_address = [2; HASHED_PUBKEY_SERIALIZED_SIZE];
+
+        let instruction =
+            new_secp256k1_instruction_with_signature(b"message", &signature, 0, &eth_address);
+
+        assert_eq!(instruction.accounts.len(), 0);
+        assert_eq!(instruction.data[0], 1);
     }
 }

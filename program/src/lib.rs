@@ -32,11 +32,6 @@ mod instruction_data;
 
 use instruction_data::{get_signature_fields, iter_signature_offsets, SignatureFields};
 
-#[cfg(all(
-    feature = "bincode",
-    not(any(target_os = "solana", target_arch = "bpf"))
-))]
-pub use instruction::new_secp256k1_instruction_with_signature;
 #[cfg(not(any(target_os = "solana", target_arch = "bpf")))]
 pub use instruction::sign_message;
 pub use instruction::{
@@ -44,6 +39,13 @@ pub use instruction::{
     HASHED_PUBKEY_SERIALIZED_SIZE, SECP256K1_PRIVATE_KEY_SIZE, SECP256K1_PUBKEY_SIZE,
     SECP256K1_UNCOMPRESSED_PUBKEY_SIZE, SIGNATURE_OFFSETS_SERIALIZED_SIZE,
     SIGNATURE_SERIALIZED_SIZE,
+};
+#[cfg(all(
+    feature = "bincode",
+    not(any(target_os = "solana", target_arch = "bpf"))
+))]
+pub use instruction::{
+    new_secp256k1_instruction_with_signature, try_new_secp256k1_instruction_with_signature,
 };
 
 #[cfg(not(feature = "no-entrypoint"))]

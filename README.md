@@ -76,8 +76,11 @@ signatures to fail.
 
 | Feature | Default | Description |
 |---|---|---|
+| `bincode` | off | Enables SDK-compatible instruction construction helpers. |
+| `dev-context-only-utils` | off | Backward-compatible alias for `bincode`, matching the upstream helper crate feature. |
 | `no-entrypoint` | off | Omits the program entrypoint; use when embedding the crate in another program or in tests that call `process_instruction` directly. |
 | `custom-heap` | off | Reserved for callers that provide a custom heap allocator. |
+| `serde` | off | Derives serde traits for `SecpSignatureOffsets`. |
 
 ## Public API
 
@@ -85,9 +88,17 @@ The SDK helpers and layout constants are exposed from `solana_secp256k1_program`
 
 ```rust
 use solana_secp256k1_program::{
-    eth_address_from_pubkey, eth_address_from_sec1_pubkey, SecpSignatureOffsets,
+    eth_address_from_pubkey, eth_address_from_sec1_pubkey,
+    new_secp256k1_instruction_with_signature, try_new_secp256k1_instruction_with_signature,
+    SecpSignatureOffsets,
 };
 ```
+
+`new_secp256k1_instruction_with_signature` keeps the upstream SDK return type
+(`Instruction`) for source compatibility. Prefer
+`try_new_secp256k1_instruction_with_signature` when callers need construction
+errors instead of panics for invalid offsets, oversized messages, or invalid
+recovery ids.
 
 ## Build and test
 

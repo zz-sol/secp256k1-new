@@ -10,6 +10,7 @@ crate-type = ["cdylib", "rlib"]
 default = []
 bincode = ["dep:bincode", "dep:solana-instruction", "dep:solana-sdk-ids", "serde"]
 custom-heap = []
+dev-context-only-utils = ["bincode"]
 no-entrypoint = []
 serde = ["dep:serde", "dep:serde_derive"]
 
