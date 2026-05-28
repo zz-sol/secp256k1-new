@@ -52,8 +52,11 @@ Each 11-byte offset record matches `SecpSignatureOffsets` exposed by this crate:
 - **All instruction-index fields must be `0`.** An SBF program receives only
   its own instruction data; cross-instruction references require a future
   runtime change.
-- **Recovery id must be `0`–`3`.** Ethereum-style `27`/`28` offsets are
-  rejected at the wire level.
+- **Recovery id must be `0`–`3`.** Values `2`/`3` are accepted for
+  compatibility with legacy Solana secp256k1 instruction data and are passed
+  through to recovery, where overflowing signatures generally fail as
+  `InvalidArgument`. Ethereum-style `27`/`28` offsets are rejected at the wire
+  level.
 - **Zero-signature payloads** (`count == 0`) are accepted only when the buffer
   is exactly 1 byte. Any trailing bytes are treated as malformed.
 - **No accounts.** The program takes no account arguments and returns
@@ -81,7 +84,9 @@ signatures to fail.
 The SDK helpers and layout constants are exposed from `solana_secp256k1_program`:
 
 ```rust
-use solana_secp256k1_program::{eth_address_from_pubkey, SecpSignatureOffsets};
+use solana_secp256k1_program::{
+    eth_address_from_pubkey, eth_address_from_sec1_pubkey, SecpSignatureOffsets,
+};
 ```
 
 ## Build and test

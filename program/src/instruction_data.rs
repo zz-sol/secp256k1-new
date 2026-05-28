@@ -110,17 +110,17 @@ pub(crate) fn get_signature_fields<'a>(
     instruction_data: &'a [u8],
     offsets: &'a SecpSignatureOffsets,
 ) -> Result<SignatureFields<'a>, ProgramError> {
-    let signature_with_recovery_id = get_instruction_data_slice(
+    let signature_with_recovery_id = get_instruction_data_array::<SIGNATURE_WITH_RECOVERY_ID_LENGTH>(
         instruction_data,
         offsets.signature_offset,
-        SIGNATURE_WITH_RECOVERY_ID_LENGTH,
     )?;
-    let (&recovery_id, _) = signature_with_recovery_id
-        .split_last()
-        .ok_or(ProgramError::InvalidInstructionData)?;
+    let signature = signature_with_recovery_id[..SIGNATURE_SERIALIZED_SIZE]
+        .try_into()
+        .map_err(|_| ProgramError::InvalidInstructionData)?;
+    let recovery_id = signature_with_recovery_id[SIGNATURE_SERIALIZED_SIZE];
 
     Ok(SignatureFields {
-        signature: get_instruction_data_array(instruction_data, offsets.signature_offset)?,
+        signature,
         recovery_id: validate_recovery_id(recovery_id)?,
         expected_address: get_instruction_data_array(instruction_data, offsets.eth_address_offset)?,
         message: get_instruction_data_slice(
@@ -169,9 +169,13 @@ pub(crate) fn iter_signature_offsets(
         .map(unpack_signature_offsets))
 }
 
-/// Accepts the four recovery id values defined by SEC 1. Values 4 through 255
-/// (including the legacy Ethereum 27/28 offset)
-/// are explicitly rejected rather than silently truncated.
+/// Accepts the four recovery id values defined by SEC 1.
+///
+/// Values `2` and `3` are accepted for compatibility with legacy Solana
+/// secp256k1 instruction data. They are passed through to recovery, where
+/// overflowing signatures generally fail as [`ProgramError::InvalidArgument`].
+/// Values 4 through 255 (including the legacy Ethereum 27/28 offset) are
+/// explicitly rejected rather than silently truncated.
 fn validate_recovery_id(recovery_id: u8) -> Result<u8, ProgramError> {
     match recovery_id {
         0..=3 => Ok(recovery_id),

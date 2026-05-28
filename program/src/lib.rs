@@ -40,8 +40,9 @@ pub use instruction::new_secp256k1_instruction_with_signature;
 #[cfg(not(any(target_os = "solana", target_arch = "bpf")))]
 pub use instruction::sign_message;
 pub use instruction::{
-    eth_address_from_pubkey, SecpSignatureOffsets, DATA_START, HASHED_PUBKEY_SERIALIZED_SIZE,
-    SECP256K1_PRIVATE_KEY_SIZE, SECP256K1_PUBKEY_SIZE, SIGNATURE_OFFSETS_SERIALIZED_SIZE,
+    eth_address_from_pubkey, eth_address_from_sec1_pubkey, SecpSignatureOffsets, DATA_START,
+    HASHED_PUBKEY_SERIALIZED_SIZE, SECP256K1_PRIVATE_KEY_SIZE, SECP256K1_PUBKEY_SIZE,
+    SECP256K1_UNCOMPRESSED_PUBKEY_SIZE, SIGNATURE_OFFSETS_SERIALIZED_SIZE,
     SIGNATURE_SERIALIZED_SIZE,
 };
 

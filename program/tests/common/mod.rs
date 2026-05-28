@@ -2,8 +2,9 @@ use {
     k256::ecdsa::SigningKey,
     solana_keccak_hasher::hash,
     solana_secp256k1_program::{
-        eth_address_from_pubkey, SecpSignatureOffsets, HASHED_PUBKEY_SERIALIZED_SIZE,
-        SECP256K1_PUBKEY_SIZE, SIGNATURE_OFFSETS_SERIALIZED_SIZE, SIGNATURE_SERIALIZED_SIZE,
+        eth_address_from_sec1_pubkey, SecpSignatureOffsets, HASHED_PUBKEY_SERIALIZED_SIZE,
+        SECP256K1_UNCOMPRESSED_PUBKEY_SIZE, SIGNATURE_OFFSETS_SERIALIZED_SIZE,
+        SIGNATURE_SERIALIZED_SIZE,
     },
 };
 
@@ -26,9 +27,8 @@ fn signed_payload<'a>(signing_key: &SigningKey, message: &'a [u8]) -> SignedPayl
 
     let verifying_key = signing_key.verifying_key();
     let encoded = verifying_key.to_encoded_point(false);
-    // Drop the SEC1 0x04 prefix; Ethereum hashes only the 64-byte x||y body.
-    let pubkey: [u8; SECP256K1_PUBKEY_SIZE] = encoded.as_bytes()[1..65].try_into().unwrap();
-    let address = eth_address_from_pubkey(&pubkey);
+    let pubkey: [u8; SECP256K1_UNCOMPRESSED_PUBKEY_SIZE] = encoded.as_bytes().try_into().unwrap();
+    let address = eth_address_from_sec1_pubkey(&pubkey).unwrap();
 
     SignedPayload {
         signature,
