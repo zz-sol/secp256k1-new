@@ -12,11 +12,11 @@
 //! instruction data buffer.
 
 use {
-    solana_program_error::ProgramError,
-    solana_secp256k1_program_sdk::{
+    crate::{
         SecpSignatureOffsets, HASHED_PUBKEY_SERIALIZED_SIZE, SIGNATURE_OFFSETS_SERIALIZED_SIZE,
         SIGNATURE_SERIALIZED_SIZE,
     },
+    solana_program_error::ProgramError,
 };
 
 const RECOVERY_ID_LENGTH: usize = 1;

@@ -1,7 +1,7 @@
 use {
     k256::ecdsa::SigningKey,
     solana_keccak_hasher::hash,
-    solana_secp256k1_program_sdk::{
+    solana_secp256k1_program::{
         eth_address_from_pubkey, SecpSignatureOffsets, HASHED_PUBKEY_SERIALIZED_SIZE,
         SECP256K1_PUBKEY_SIZE, SIGNATURE_OFFSETS_SERIALIZED_SIZE, SIGNATURE_SERIALIZED_SIZE,
     },

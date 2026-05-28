@@ -35,8 +35,7 @@ Verification relies only on existing Solana runtime syscalls:
 [1 + 11*N ..]         payload: signatures, addresses, messages (order flexible)
 ```
 
-Each 11-byte offset record matches `SecpSignatureOffsets` from the upstream
-`solana-secp256k1-program` SDK crate:
+Each 11-byte offset record matches `SecpSignatureOffsets` exposed by this crate:
 
 ```text
 [0..2]    signature_offset        - byte position of 64-byte r||s + 1-byte recovery id
@@ -79,11 +78,10 @@ signatures to fail.
 
 ## Public API
 
-`eth_address_from_pubkey` is re-exported from `solana_secp256k1_program` for
-convenience:
+The SDK helpers and layout constants are exposed from `solana_secp256k1_program`:
 
 ```rust
-use solana_secp256k1_program::eth_address_from_pubkey;
+use solana_secp256k1_program::{eth_address_from_pubkey, SecpSignatureOffsets};
 ```
 
 ## Build and test

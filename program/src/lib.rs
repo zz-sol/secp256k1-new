@@ -7,7 +7,7 @@
 //! # Instruction format
 //!
 //! The instruction data mirrors the layout consumed by the native secp256k1
-//! precompile (see the upstream `solana-secp256k1-program` SDK crate):
+//! precompile:
 //!
 //! ```text
 //! [num_signatures: u8]
@@ -25,14 +25,25 @@ use solana_keccak_hasher::hash;
 use solana_program_entrypoint::ProgramResult;
 use solana_program_error::ProgramError;
 use solana_pubkey::Pubkey;
-use solana_secp256k1_program_sdk::SecpSignatureOffsets;
 use solana_secp256k1_recover::secp256k1_recover;
 
+mod instruction;
 mod instruction_data;
 
 use instruction_data::{get_signature_fields, iter_signature_offsets, SignatureFields};
 
-pub use solana_secp256k1_program_sdk::eth_address_from_pubkey;
+#[cfg(all(
+    feature = "bincode",
+    not(any(target_os = "solana", target_arch = "bpf"))
+))]
+pub use instruction::new_secp256k1_instruction_with_signature;
+#[cfg(not(any(target_os = "solana", target_arch = "bpf")))]
+pub use instruction::sign_message;
+pub use instruction::{
+    eth_address_from_pubkey, SecpSignatureOffsets, DATA_START, HASHED_PUBKEY_SERIALIZED_SIZE,
+    SECP256K1_PRIVATE_KEY_SIZE, SECP256K1_PUBKEY_SIZE, SIGNATURE_OFFSETS_SERIALIZED_SIZE,
+    SIGNATURE_SERIALIZED_SIZE,
+};
 
 #[cfg(not(feature = "no-entrypoint"))]
 solana_program_entrypoint::entrypoint!(process_instruction);
