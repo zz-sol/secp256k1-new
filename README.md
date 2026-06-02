@@ -111,7 +111,7 @@ also require the nightly Rust chain `nightly-2026-01-22` (`clippy`,
 cargo test --manifest-path program/Cargo.toml
 
 # SBF build only
-cargo build-sbf --arch v3 --manifest-path program/Cargo.toml
+cargo build-sbf --no-rustup-override --arch v3 --manifest-path program/Cargo.toml
 
 # SBF build via Makefile
 make build-sbf-program

@@ -25,7 +25,7 @@
 //!
 //! Solana also exposes the lower-level [`solana_secp256k1_recover`] syscall for
 //! direct public-key recovery. This crate does not expose raw recovery as a
-//! program ABI; it validates recovered keys against the expected Ethereum
+//! program interface; it validates recovered keys against the expected Ethereum
 //! address embedded in the instruction data.
 //!
 //! Typical use cases include:
@@ -42,12 +42,12 @@
 //!
 //! - The re-exported SDK surface provides types like [`SecpSignatureOffsets`],
 //!   layout constants, Ethereum address helpers, and instruction builders.
-//! - [`processor`] contains the on-chain verification logic.
-//! - [`instruction_data`] contains parser helpers for the 11-byte offset records
+//! - The `processor` module contains the on-chain verification logic.
+//! - The `instruction_data` module contains parser helpers for the 11-byte offset records
 //!   and instruction payload slices.
 //!
 //! The crate root remains thin and contains only documentation, re-exports, and
-//! the Solana entrypoint.
+//! the Solana entry point.
 //!
 //! # How to use this program
 //!
@@ -55,7 +55,7 @@
 //!
 //! 1. A client constructs secp256k1-compatible instruction data containing the
 //!    signature metadata and any inline payload bytes.
-//! 2. A program either CPIs into this verifier or inspects the transaction's
+//! 2. A program either invokes this verifier by cross-program invocation or inspects the transaction's
 //!    native secp256k1 instruction and checks that the verified messages and
 //!    addresses match its own expectations.
 //!
@@ -120,7 +120,7 @@
 //! The underlying recovery syscall does not reject high-`S` signatures by
 //! default. This crate normalizes supported high-`S` signatures before recovery
 //! so that valid malleable forms still verify against the same signer address.
-//! Programs that care about canonical encodings should still define and enforce
+//! Programs that care about canonical forms should still define and enforce
 //! their own policy at the application layer.
 //!
 //! # Additional security considerations
@@ -153,18 +153,27 @@ mod instruction;
 mod instruction_data;
 mod processor;
 
+#[cfg(not(any(target_os = "solana", target_arch = "bpf")))]
+pub use instruction::sign_message;
 pub use instruction::{
-    eth_address_from_pubkey, eth_address_from_sec1_pubkey, sign_message, SecpSignatureOffsets,
-    DATA_START, HASHED_PUBKEY_SERIALIZED_SIZE, SECP256K1_PRIVATE_KEY_SIZE, SECP256K1_PUBKEY_SIZE,
+    eth_address_from_pubkey, eth_address_from_sec1_pubkey, SecpSignatureOffsets, DATA_START,
+    HASHED_PUBKEY_SERIALIZED_SIZE, SECP256K1_PRIVATE_KEY_SIZE, SECP256K1_PUBKEY_SIZE,
     SECP256K1_UNCOMPRESSED_PUBKEY_SIZE, SIGNATURE_OFFSETS_SERIALIZED_SIZE,
     SIGNATURE_SERIALIZED_SIZE,
+};
+#[cfg(all(
+    feature = "bincode",
+    not(any(target_os = "solana", target_arch = "bpf"))
+))]
+pub use instruction::{
+    new_secp256k1_instruction_with_signature, try_new_secp256k1_instruction_with_signature,
 };
 pub use processor::process_instruction;
 
 #[cfg(target_os = "solana")]
 use solana_program_error::ProgramError;
 
-/// Program entry point for the VM v2 instruction-data pointer ABI.
+/// Program entry point for the version 2 instruction-data pointer interface.
 ///
 /// # Safety
 ///
@@ -179,9 +188,11 @@ pub unsafe extern "C" fn entrypoint(input: *mut u8, instruction_data_addr: *cons
         if num_accounts != 0 {
             Err(ProgramError::InvalidArgument)
         } else {
-            let instruction_data_len_addr = (instruction_data_addr as usize)
-                .checked_sub(core::mem::size_of::<u64>())
-                .ok_or(ProgramError::InvalidInstructionData)?;
+            let Some(instruction_data_len_addr) =
+                (instruction_data_addr as usize).checked_sub(core::mem::size_of::<u64>())
+            else {
+                return ProgramError::InvalidInstructionData.into();
+            };
             let instruction_data_len = *(instruction_data_len_addr as *const u64);
             let instruction_data =
                 core::slice::from_raw_parts(instruction_data_addr, instruction_data_len as usize);
