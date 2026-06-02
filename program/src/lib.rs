@@ -1,12 +1,90 @@
-//! Solana program that verifies secp256k1 signatures on-chain.
+//! Instructions and on-chain verification for the [`secp256k1` native program][np].
 //!
-//! This program mirrors the native [`secp256k1` precompile] instruction format
-//! so that other programs can CPI into it and trust the result.
+//! [np]: https://solana.com/docs/core/programs/precompiles#verify-secp256k1-recovery
 //!
-//! # Instruction format
+//! This crate contains the on-chain processor that re-verifies secp256k1
+//! signatures inside a Solana program, and re-exports the shared secp256k1
+//! instruction types and client-side builders from the upstream SDK crate.
+//!
+//! _This crate exposes low-level cryptographic building blocks. Read this
+//! documentation carefully and validate instruction layout assumptions in any
+//! program that depends on signature verification for safety._
+//!
+//! The native secp256k1 program performs flexible verification of secp256k1
+//! ECDSA signatures, as used by Ethereum. The shared API re-exported by this
+//! crate mirrors that native instruction format so clients can build compatible
+//! instructions, while this crate's processor lets other programs CPI into a
+//! verifier and trust the result.
+//!
+//! The instruction is primarily designed for Ethereum interoperability, but it
+//! is also useful for more general secp256k1 verification. It operates on
+//! Ethereum addresses, which are Keccak hashes of secp256k1 public keys, and it
+//! internally relies on secp256k1 key recovery. Ethereum addresses can be
+//! derived from uncompressed secp256k1 public keys with
+//! [`eth_address_from_pubkey`].
+//!
+//! Solana also exposes the lower-level [`solana_secp256k1_recover`] syscall for
+//! direct public-key recovery. This crate does not expose raw recovery as a
+//! program ABI; it validates recovered keys against the expected Ethereum
+//! address embedded in the instruction data.
+//!
+//! Typical use cases include:
+//!
+//! - Verifying Ethereum transaction signatures.
+//! - Verifying Ethereum EIP-712 signatures.
+//! - Verifying arbitrary secp256k1 signatures.
+//! - Requiring multiple signatures over one or more messages.
+//!
+//! # Current crate structure
+//!
+//! This crate intentionally separates the shared client-facing wire definitions
+//! from the on-chain verifier implementation:
+//!
+//! - The re-exported SDK surface provides types like [`SecpSignatureOffsets`],
+//!   layout constants, Ethereum address helpers, and instruction builders.
+//! - [`processor`] contains the on-chain verification logic.
+//! - [`instruction_data`] contains parser helpers for the 11-byte offset records
+//!   and instruction payload slices.
+//!
+//! The crate root remains thin and contains only documentation, re-exports, and
+//! the Solana entrypoint.
+//!
+//! # How to use this program
+//!
+//! A typical transaction includes at least two logical steps:
+//!
+//! 1. A client constructs secp256k1-compatible instruction data containing the
+//!    signature metadata and any inline payload bytes.
+//! 2. A program either CPIs into this verifier or inspects the transaction's
+//!    native secp256k1 instruction and checks that the verified messages and
+//!    addresses match its own expectations.
+//!
+//! In client code, the usual flow is:
+//!
+//! - Sign the Keccak-hashed messages with a secp256k1 ECDSA library.
+//! - Build any custom instruction data that contains signatures, messages, or
+//!   Ethereum addresses referenced by the secp256k1 offsets.
+//! - Build the secp256k1 instruction data, specifying the instruction indexes
+//!   and byte offsets of each signature, message, and Ethereum address.
+//! - Submit all required instructions in one transaction.
+//!
+//! In on-chain code, the usual flow is:
+//!
+//! - Ensure the verifier is the expected program.
+//! - Validate the number of signatures and the instruction layout.
+//! - Check that the recovered signer addresses and signed messages match the
+//!   program's own authorization rules.
+//!
+//! This crate's processor is intentionally stricter than the native precompile:
+//! all offset references must point to the current instruction (index `0`). An
+//! SBF program receives only its own instruction data, so supporting sibling
+//! instruction references would require runtime support that Solana programs do
+//! not currently have.
+//!
+//! # Instruction data layout
 //!
 //! The instruction data mirrors the layout consumed by the native secp256k1
-//! precompile (see the upstream `solana-secp256k1-program` SDK crate):
+//! precompile:
 //!
 //! ```text
 //! [num_signatures: u8]
@@ -14,27 +92,72 @@
 //! [signature || recovery_id | eth_address | message …]   (payload, order flexible)
 //! ```
 //!
-//! All data references inside `SecpSignatureOffsets` must point into the same
-//! instruction (index 0); cross-instruction references are rejected.
+//! The payload bytes can be arranged however the client wants, as long as each
+//! [`SecpSignatureOffsets`] record points at the correct byte ranges.
 //!
-//! [`secp256k1` precompile]: https://solana.com/docs/core/programs/precompiles#verify-secp256k1-recovery
-
-use solana_account_info::AccountInfo;
-use solana_keccak_hasher::hash;
-use solana_program_entrypoint::ProgramResult;
-use solana_program_error::ProgramError;
-use solana_pubkey::Pubkey;
-use solana_secp256k1_program_sdk::{eth_address_from_pubkey, SIGNATURE_SERIALIZED_SIZE};
-use solana_secp256k1_recover::secp256k1_recover;
+//! The serialized offset structure has the following 11-byte layout:
+//!
+//! | index | bytes | type  | description |
+//! |-------|-------|-------|-------------|
+//! | 0     | 2     | `u16` | `signature_offset`: offset to the 64-byte compact signature. |
+//! | 2     | 1     | `u8`  | `signature_instruction_index`: instruction index containing the signature. |
+//! | 3     | 2     | `u16` | `eth_address_offset`: offset to the 20-byte Ethereum address. |
+//! | 5     | 1     | `u8`  | `eth_address_instruction_index`: instruction index containing the address. |
+//! | 6     | 2     | `u16` | `message_data_offset`: offset to the message bytes. |
+//! | 8     | 2     | `u16` | `message_data_size`: message length in bytes. |
+//! | 10    | 1     | `u8`  | `message_instruction_index`: instruction index containing the message. |
+//!
+//! All data references inside [`SecpSignatureOffsets`] must point into the same
+//! instruction when processed by this crate; cross-instruction references are
+//! rejected.
+//!
+//! # Signature malleability
+//!
+//! ECDSA signatures are malleable: given one valid signature, another distinct
+//! but equally valid signature can be derived. This matters when applications
+//! assume signatures have a unique representation.
+//!
+//! The underlying recovery syscall does not reject high-`S` signatures by
+//! default. This crate normalizes supported high-`S` signatures before recovery
+//! so that valid malleable forms still verify against the same signer address.
+//! Programs that care about canonical encodings should still define and enforce
+//! their own policy at the application layer.
+//!
+//! # Additional security considerations
+//!
+//! Most programs should be conservative about what instruction shapes they
+//! accept. Desirable checks often include:
+//!
+//! - The number of signatures is exactly what the program expects.
+//! - Every instruction index field is exactly where the program expects the
+//!   signature material to live.
+//! - The signed messages are domain-separated and cannot be replayed across
+//!   unrelated instructions or protocols.
+//! - The verifier program ID is the expected one, so a malicious program cannot
+//!   fake a successful verification path.
+//!
+//! # Errors
+//!
+//! Verification fails if any of the following are true:
+//!
+//! - Any signature is invalid.
+//! - Any recovered signer does not match the provided Ethereum address.
+//! - Any signature recovery id is outside `0..=3`.
+//! - The instruction data is empty or truncated.
+//! - The instruction advertises zero signatures but contains trailing payload.
+//! - The offset table extends past the provided instruction data.
+//! - Any referenced slice exceeds the instruction-data bounds.
+//! - Any offset record references an instruction index other than `0`.
 
 mod instruction_data;
+pub mod processor;
 
-use instruction_data::{
-    get_signature_fields, iter_signature_offsets, SignatureFields, SignatureOffsets,
-};
+pub use processor::process_instruction;
+#[doc(inline)]
+pub use solana_secp256k1_program_sdk::*;
 
-#[doc(hidden)]
-pub use instruction_data::unpack_signature_offsets;
+#[cfg(target_os = "solana")]
+use solana_program_error::ProgramError;
 
 /// Program entry point for the VM v2 instruction-data pointer ABI.
 ///
@@ -43,7 +166,7 @@ pub use instruction_data::unpack_signature_offsets;
 /// The Solana runtime must pass `input` as the serialized accounts buffer and
 /// `instruction_data_addr` as the pointer to instruction data with its length
 /// stored in the preceding 8 bytes.
-#[cfg(target_os = "solana")]
+#[cfg(all(target_os = "solana", not(feature = "no-entrypoint")))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn entrypoint(input: *mut u8, instruction_data_addr: *const u8) -> u64 {
     let result = unsafe {
@@ -51,10 +174,13 @@ pub unsafe extern "C" fn entrypoint(input: *mut u8, instruction_data_addr: *cons
         if num_accounts != 0 {
             Err(ProgramError::InvalidArgument)
         } else {
-            let instruction_data_len = *((instruction_data_addr as u64 - 8) as *const u64);
+            let instruction_data_len_addr = (instruction_data_addr as usize)
+                .checked_sub(core::mem::size_of::<u64>())
+                .ok_or(ProgramError::InvalidInstructionData)?;
+            let instruction_data_len = *(instruction_data_len_addr as *const u64);
             let instruction_data =
                 core::slice::from_raw_parts(instruction_data_addr, instruction_data_len as usize);
-            verify_secp256k1_instruction(instruction_data)
+            processor::verify_secp256k1_instruction(instruction_data)
         }
     };
 
@@ -64,10 +190,12 @@ pub unsafe extern "C" fn entrypoint(input: *mut u8, instruction_data_addr: *cons
     }
 }
 
+#[cfg(not(feature = "no-entrypoint"))]
 solana_program_entrypoint::custom_heap_default!();
+#[cfg(not(feature = "no-entrypoint"))]
 solana_program_entrypoint::custom_panic_default!();
 
-#[cfg(target_os = "solana")]
+#[cfg(all(target_os = "solana", not(feature = "no-entrypoint")))]
 #[unsafe(no_mangle)]
 pub extern "C" fn abort() -> ! {
     let message = "abort";
@@ -80,130 +208,5 @@ pub extern "C" fn abort() -> ! {
             line!() as u64,
             column!() as u64,
         )
-    }
-}
-
-/// Transaction index of the instruction whose data this program is verifying.
-///
-/// An SBF program only receives its own instruction data, so all offset fields
-/// in `SecpSignatureOffsets` must reference index 0. Supporting other indices
-/// would require a runtime change to expose sibling instruction data.
-const CURRENT_INSTRUCTION_INDEX: u8 = 0;
-const SIGNATURE_SCALAR_LENGTH: usize = 32;
-const SECP256K1_ORDER: [u8; SIGNATURE_SCALAR_LENGTH] = [
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe,
-    0xba, 0xae, 0xdc, 0xe6, 0xaf, 0x48, 0xa0, 0x3b, 0xbf, 0xd2, 0x5e, 0x8c, 0xd0, 0x36, 0x41, 0x41,
-];
-const SECP256K1_HALF_ORDER: [u8; SIGNATURE_SCALAR_LENGTH] = [
-    0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0x5d, 0x57, 0x6e, 0x73, 0x57, 0xa4, 0x50, 0x1d, 0xdf, 0xe9, 0x2f, 0x46, 0x68, 0x1b, 0x20, 0xa0,
-];
-
-/// Returns `true` when every offset field in `offsets` references the current
-/// instruction (index 0) rather than a sibling instruction in the transaction.
-fn references_current_instruction(offsets: &SignatureOffsets<'_>) -> bool {
-    offsets.signature_instruction_index() == CURRENT_INSTRUCTION_INDEX
-        && offsets.eth_address_instruction_index() == CURRENT_INSTRUCTION_INDEX
-        && offsets.message_instruction_index() == CURRENT_INSTRUCTION_INDEX
-}
-
-/// Parses `instruction_data` and verifies every secp256k1 signature it
-/// describes, returning an error on the first failure.
-fn verify_secp256k1_instruction(instruction_data: &[u8]) -> ProgramResult {
-    for offsets in iter_signature_offsets(instruction_data)? {
-        verify_signature(instruction_data, &offsets?)?;
-    }
-
-    Ok(())
-}
-
-/// Program entry point.
-///
-/// Expects no accounts and instruction data in the secp256k1 precompile
-/// format. Returns [`ProgramError::InvalidArgument`] if any accounts are
-/// provided, or propagates errors from signature verification.
-pub fn process_instruction(
-    _program_id: &Pubkey,
-    accounts: &[AccountInfo],
-    instruction_data: &[u8],
-) -> ProgramResult {
-    if !accounts.is_empty() {
-        return Err(ProgramError::InvalidArgument);
-    }
-
-    verify_secp256k1_instruction(instruction_data)
-}
-
-/// Validates a single signature entry described by `offsets`.
-///
-/// Rejects offsets that reference instructions other than the current one,
-/// then extracts the raw fields and delegates to [`verify_signature_fields`].
-fn verify_signature(instruction_data: &[u8], offsets: &SignatureOffsets<'_>) -> ProgramResult {
-    if !references_current_instruction(offsets) {
-        return Err(ProgramError::InvalidInstructionData);
-    }
-
-    let fields = get_signature_fields(instruction_data, offsets)?;
-    verify_signature_fields(&fields)
-}
-
-/// Performs the signature check for one entry.
-///
-/// Hashes `fields.message` with Keccak-256, recovers the secp256k1 public key
-/// from the compact signature, derives its Ethereum address, and compares it
-/// against `fields.expected_address`. Returns [`ProgramError::InvalidArgument`]
-/// if recovery fails or the addresses do not match.
-fn verify_signature_fields(fields: &SignatureFields) -> ProgramResult {
-    let message_hash = hash(fields.message);
-    let mut normalized_signature = [0u8; SIGNATURE_SERIALIZED_SIZE];
-    let (signature, recovery_id) = normalize_malleable_signature(
-        fields.signature,
-        fields.recovery_id,
-        &mut normalized_signature,
-    );
-    let recovered_pubkey = secp256k1_recover(message_hash.as_bytes(), recovery_id, signature)
-        .map_err(|_| ProgramError::InvalidArgument)?;
-
-    let recovered_address = eth_address_from_pubkey(&recovered_pubkey.to_bytes());
-    if recovered_address.as_ref() != fields.expected_address {
-        return Err(ProgramError::InvalidArgument);
-    }
-
-    Ok(())
-}
-
-fn normalize_malleable_signature<'a>(
-    signature: &'a [u8; SIGNATURE_SERIALIZED_SIZE],
-    recovery_id: u8,
-    normalized_signature: &'a mut [u8; SIGNATURE_SERIALIZED_SIZE],
-) -> (&'a [u8; SIGNATURE_SERIALIZED_SIZE], u8) {
-    let s = signature_s(signature);
-    if s > SECP256K1_HALF_ORDER.as_slice() && s < SECP256K1_ORDER.as_slice() {
-        for (destination, source) in normalized_signature.iter_mut().zip(signature.iter()) {
-            *destination = *source;
-        }
-        subtract_s_from_order(&mut normalized_signature[SIGNATURE_SCALAR_LENGTH..]);
-        (normalized_signature, recovery_id ^ 1)
-    } else {
-        (signature, recovery_id)
-    }
-}
-
-fn signature_s(signature: &[u8; SIGNATURE_SERIALIZED_SIZE]) -> &[u8] {
-    &signature[SIGNATURE_SCALAR_LENGTH..]
-}
-
-fn subtract_s_from_order(s: &mut [u8]) {
-    let mut borrow = 0u16;
-    for (byte, order_byte) in s.iter_mut().rev().zip(SECP256K1_ORDER.iter().rev()) {
-        let subtrahend = u16::from(*byte) + borrow;
-        let minuend = u16::from(*order_byte);
-        if minuend >= subtrahend {
-            *byte = (minuend - subtrahend) as u8;
-            borrow = 0;
-        } else {
-            *byte = (minuend + 256 - subtrahend) as u8;
-            borrow = 1;
-        }
     }
 }

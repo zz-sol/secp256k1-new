@@ -12,10 +12,10 @@
 //! instruction data buffer.
 
 use {
-    core::{iter, mem::size_of, slice::ChunksExact},
+    core::mem::{align_of, size_of},
     solana_program_error::ProgramError,
     solana_secp256k1_program_sdk::{
-        SecpSignatureOffsets, HASHED_PUBKEY_SERIALIZED_SIZE, SIGNATURE_OFFSETS_SERIALIZED_SIZE,
+        HASHED_PUBKEY_SERIALIZED_SIZE, SIGNATURE_OFFSETS_SERIALIZED_SIZE,
         SIGNATURE_SERIALIZED_SIZE,
     },
     solana_zero_copy::unaligned::U16,
@@ -33,6 +33,7 @@ struct SignatureOffsetsBytes {
 }
 
 const _: [(); SIGNATURE_OFFSETS_SERIALIZED_SIZE] = [(); size_of::<SignatureOffsetsBytes>()];
+const _: [(); 1] = [(); align_of::<SignatureOffsetsBytes>()];
 
 /// Borrowed view into one serialized `SecpSignatureOffsets` record.
 pub(crate) struct SignatureOffsets<'a> {
@@ -67,18 +68,6 @@ impl SignatureOffsets<'_> {
     pub(crate) fn message_instruction_index(&self) -> u8 {
         self.bytes.message_instruction_index
     }
-
-    fn to_secp_signature_offsets(&self) -> SecpSignatureOffsets {
-        SecpSignatureOffsets {
-            signature_offset: self.signature_offset(),
-            signature_instruction_index: self.signature_instruction_index(),
-            eth_address_offset: self.eth_address_offset(),
-            eth_address_instruction_index: self.eth_address_instruction_index(),
-            message_data_offset: self.message_data_offset(),
-            message_data_size: self.message_data_size(),
-            message_instruction_index: self.message_instruction_index(),
-        }
-    }
 }
 
 /// Borrowed views into the raw signature fields for one entry.
@@ -94,15 +83,6 @@ pub(crate) struct SignatureFields<'a> {
     pub(crate) expected_address: &'a [u8; HASHED_PUBKEY_SERIALIZED_SIZE],
     /// Raw message bytes that were signed (before hashing).
     pub(crate) message: &'a [u8],
-}
-
-/// Parses an 11-byte `SecpSignatureOffsets` record from `input`.
-///
-/// Returns [`ProgramError::InvalidInstructionData`] if `input` is not exactly
-/// [`SIGNATURE_OFFSETS_SERIALIZED_SIZE`] bytes long.
-#[doc(hidden)]
-pub fn unpack_signature_offsets(input: &[u8]) -> Result<SecpSignatureOffsets, ProgramError> {
-    Ok(signature_offsets_from_bytes(input)?.to_secp_signature_offsets())
 }
 
 fn signature_offsets_from_bytes(input: &[u8]) -> Result<SignatureOffsets<'_>, ProgramError> {
@@ -176,22 +156,6 @@ pub(crate) fn get_signature_fields<'a>(
     })
 }
 
-pub(crate) enum SignatureOffsetsIter<'a> {
-    Empty(iter::Empty<Result<SignatureOffsets<'a>, ProgramError>>),
-    Chunks(ChunksExact<'a, u8>),
-}
-
-impl<'a> Iterator for SignatureOffsetsIter<'a> {
-    type Item = Result<SignatureOffsets<'a>, ProgramError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            Self::Empty(iter) => iter.next(),
-            Self::Chunks(chunks) => chunks.next().map(signature_offsets_from_bytes),
-        }
-    }
-}
-
 /// Parses the leading `num_signatures` byte and returns an iterator that yields
 /// one `SecpSignatureOffsets` per entry.
 ///
@@ -203,29 +167,28 @@ impl<'a> Iterator for SignatureOffsetsIter<'a> {
 /// - Overflow in the total offsets size is rejected via `checked_mul`.
 pub(crate) fn iter_signature_offsets(
     input: &[u8],
-) -> Result<SignatureOffsetsIter<'_>, ProgramError> {
+) -> Result<impl Iterator<Item = Result<SignatureOffsets<'_>, ProgramError>> + '_, ProgramError> {
     let num_signatures = *input.first().ok_or(ProgramError::InvalidInstructionData)?;
-    if num_signatures == 0 {
-        if input.len() == 1 {
-            return Ok(SignatureOffsetsIter::Empty(iter::empty()));
+    let all_offsets = if num_signatures == 0 {
+        if input.len() != 1 {
+            return Err(ProgramError::InvalidInstructionData);
         }
+        &input[1..1]
+    } else {
+        let all_offsets_size = SIGNATURE_OFFSETS_SERIALIZED_SIZE
+            .checked_mul(usize::from(num_signatures))
+            .ok_or(ProgramError::InvalidInstructionData)?;
+        let all_offsets_end = 1usize
+            .checked_add(all_offsets_size)
+            .ok_or(ProgramError::InvalidInstructionData)?;
+        input
+            .get(1..all_offsets_end)
+            .ok_or(ProgramError::InvalidInstructionData)?
+    };
 
-        return Err(ProgramError::InvalidInstructionData);
-    }
-
-    let all_offsets_size = SIGNATURE_OFFSETS_SERIALIZED_SIZE
-        .checked_mul(usize::from(num_signatures))
-        .ok_or(ProgramError::InvalidInstructionData)?;
-    let all_offsets_end = 1usize
-        .checked_add(all_offsets_size)
-        .ok_or(ProgramError::InvalidInstructionData)?;
-    let all_offsets = input
-        .get(1..all_offsets_end)
-        .ok_or(ProgramError::InvalidInstructionData)?;
-
-    Ok(SignatureOffsetsIter::Chunks(
-        all_offsets.chunks_exact(SIGNATURE_OFFSETS_SERIALIZED_SIZE),
-    ))
+    Ok(all_offsets
+        .chunks_exact(SIGNATURE_OFFSETS_SERIALIZED_SIZE)
+        .map(signature_offsets_from_bytes))
 }
 
 /// Accepts the four recovery id values defined by SEC 1. Values 4 through 255

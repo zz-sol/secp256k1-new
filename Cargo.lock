@@ -2473,7 +2473,17 @@ dependencies = [
 
 [[package]]
 name = "solana-secp256k1-program"
-version = "0.1.0"
+version = "3.0.1"
+source = "git+https://github.com/anza-xyz/solana-sdk?rev=70ed9d2c654bd1f1181db5295632e17bba208b8b#70ed9d2c654bd1f1181db5295632e17bba208b8b"
+dependencies = [
+ "k256",
+ "solana-keccak-hasher 3.1.0 (git+https://github.com/anza-xyz/solana-sdk?rev=70ed9d2c654bd1f1181db5295632e17bba208b8b)",
+ "solana-signature 3.4.0 (git+https://github.com/anza-xyz/solana-sdk?rev=70ed9d2c654bd1f1181db5295632e17bba208b8b)",
+]
+
+[[package]]
+name = "solana-secp256k1-program"
+version = "4.0.0"
 dependencies = [
  "k256",
  "mollusk-svm",
@@ -2487,16 +2497,6 @@ dependencies = [
  "solana-secp256k1-program 3.0.1",
  "solana-secp256k1-recover",
  "solana-zero-copy",
-]
-
-[[package]]
-name = "solana-secp256k1-program"
-version = "3.0.1"
-source = "git+https://github.com/anza-xyz/solana-sdk?rev=70ed9d2c654bd1f1181db5295632e17bba208b8b#70ed9d2c654bd1f1181db5295632e17bba208b8b"
-dependencies = [
- "k256",
- "solana-keccak-hasher 3.1.0 (git+https://github.com/anza-xyz/solana-sdk?rev=70ed9d2c654bd1f1181db5295632e17bba208b8b)",
- "solana-signature 3.4.0 (git+https://github.com/anza-xyz/solana-sdk?rev=70ed9d2c654bd1f1181db5295632e17bba208b8b)",
 ]
 
 [[package]]
