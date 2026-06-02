@@ -1,6 +1,6 @@
 [package]
 name = "solana-secp256k1-program"
-version = "0.1.0"
+version = "4.0.0"
 edition = "2021"
 
 [lib]
@@ -8,9 +8,6 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
-bincode = ["dep:bincode", "dep:solana-instruction", "dep:solana-sdk-ids", "serde"]
-custom-heap = []
-dev-context-only-utils = ["bincode"]
 no-entrypoint = []
 serde = ["dep:serde", "dep:serde_derive"]
 
@@ -26,6 +23,7 @@ solana-program-error = { workspace = true }
 solana-pubkey = { workspace = true }
 solana-sdk-ids = { workspace = true, optional = true }
 solana-secp256k1-recover = { workspace = true }
+solana-zero-copy = { workspace = true }
 
 [target.'cfg(not(any(target_os = "solana", target_arch = "bpf")))'.dependencies]
 k256 = { workspace = true }

@@ -82,11 +82,7 @@ pub(crate) fn signed_instruction(messages: &[&[u8]]) -> Vec<u8> {
 
 /// Parses and returns the first `SecpSignatureOffsets` entry from `instruction`.
 pub(crate) fn first_offsets(instruction: &[u8]) -> SecpSignatureOffsets {
-    read_offsets(&instruction[1..1 + SIGNATURE_OFFSETS_SERIALIZED_SIZE])
-}
-
-/// Deserializes the 11-byte little-endian wire format.
-fn read_offsets(input: &[u8]) -> SecpSignatureOffsets {
+    let input = &instruction[1..1 + SIGNATURE_OFFSETS_SERIALIZED_SIZE];
     SecpSignatureOffsets {
         signature_offset: u16::from_le_bytes(input[0..2].try_into().unwrap()),
         signature_instruction_index: input[2],

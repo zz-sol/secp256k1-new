@@ -1,6 +1,6 @@
 # solana-secp256k1-program: on-chain signature verification for Solana
 
-A minimal Solana SBF program that re-verifies secp256k1 ECDSA signatures
+A minimal Solana SBF program that verifies secp256k1 ECDSA signatures
 on-chain without adding any new runtime syscalls.
 
 ## Motivation
@@ -16,7 +16,7 @@ one and act on the explicit pass/fail result, rather than relying on
 `sysvar::instructions` inspection to confirm a parallel precompile instruction
 succeeded.
 
-[secp256k1 precompile]: https://docs.solanalabs.com/runtime/programs#secp256k1-program
+[secp256k1 precompile]: https://solana.com/docs/core/programs/precompiles#verify-secp256k1-recovery
 
 ## Syscalls used
 
@@ -111,7 +111,7 @@ also require the nightly Rust chain `nightly-2026-01-22` (`clippy`,
 cargo test --manifest-path program/Cargo.toml
 
 # SBF build only
-cargo build-sbf --manifest-path program/Cargo.toml
+cargo build-sbf --arch v3 --manifest-path program/Cargo.toml
 
 # SBF build via Makefile
 make build-sbf-program
