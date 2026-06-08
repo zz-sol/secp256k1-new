@@ -146,6 +146,25 @@ fn normalize_malleable_signature<'a>(
     }
 }
 
+fn signature_s(signature: &[u8; SIGNATURE_SERIALIZED_SIZE]) -> &[u8] {
+    &signature[SIGNATURE_SCALAR_LENGTH..]
+}
+
+fn subtract_s_from_order(s: &mut [u8]) {
+    let mut borrow = 0u16;
+    for (byte, order_byte) in s.iter_mut().rev().zip(SECP256K1_ORDER.iter().rev()) {
+        let subtrahend = u16::from(*byte) + borrow;
+        let minuend = u16::from(*order_byte);
+        if minuend >= subtrahend {
+            *byte = (minuend - subtrahend) as u8;
+            borrow = 0;
+        } else {
+            *byte = (minuend + 256 - subtrahend) as u8;
+            borrow = 1;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,24 +183,5 @@ mod tests {
             reject_cpi_stack_height(TRANSACTION_LEVEL_STACK_HEIGHT + 1),
             Err(ProgramError::InvalidArgument)
         );
-    }
-}
-
-fn signature_s(signature: &[u8; SIGNATURE_SERIALIZED_SIZE]) -> &[u8] {
-    &signature[SIGNATURE_SCALAR_LENGTH..]
-}
-
-fn subtract_s_from_order(s: &mut [u8]) {
-    let mut borrow = 0u16;
-    for (byte, order_byte) in s.iter_mut().rev().zip(SECP256K1_ORDER.iter().rev()) {
-        let subtrahend = u16::from(*byte) + borrow;
-        let minuend = u16::from(*order_byte);
-        if minuend >= subtrahend {
-            *byte = (minuend - subtrahend) as u8;
-            borrow = 0;
-        } else {
-            *byte = (minuend + 256 - subtrahend) as u8;
-            borrow = 1;
-        }
     }
 }
