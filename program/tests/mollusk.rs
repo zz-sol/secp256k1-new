@@ -8,7 +8,7 @@ use {
 
 mod common;
 
-const PROGRAM_SO_STEM: &str = "secp256k1";
+const PROGRAM_SO_STEM: &str = "solana_secp256k1_program";
 const SINGLE_MESSAGE: &[u8] = b"deterministic secp256k1 verify benchmark";
 const SECOND_MESSAGE: &[u8] = b"second deterministic secp256k1 verify benchmark";
 
@@ -18,13 +18,13 @@ fn sbf_program_path() -> Option<String> {
         let so_path = path.with_extension("so");
         assert!(
             so_path.exists(),
-            "SBF artifact not found at {}; run cargo build-sbf first",
+            "SBF artifact not found at {}; run make build-sbf-program first",
             so_path.display()
         );
         return Some(path.to_string_lossy().into_owned());
     }
 
-    eprintln!("skipping Mollusk SBF tests: run with cargo test-sbf or set SBF_OUT_DIR");
+    eprintln!("skipping Mollusk SBF tests: set SBF_OUT_DIR to target/deploy");
     None
 }
 

@@ -2,8 +2,9 @@ use {
     k256::ecdsa::SigningKey,
     solana_keccak_hasher::hash,
     solana_secp256k1_program::{
-        eth_address_from_pubkey, SecpSignatureOffsets, HASHED_PUBKEY_SERIALIZED_SIZE,
-        SECP256K1_PUBKEY_SIZE, SIGNATURE_OFFSETS_SERIALIZED_SIZE, SIGNATURE_SERIALIZED_SIZE,
+        eth_address_from_sec1_pubkey, SecpSignatureOffsets, HASHED_PUBKEY_SERIALIZED_SIZE,
+        SECP256K1_UNCOMPRESSED_PUBKEY_SIZE, SIGNATURE_OFFSETS_SERIALIZED_SIZE,
+        SIGNATURE_SERIALIZED_SIZE,
     },
 };
 
@@ -26,9 +27,8 @@ fn signed_payload<'a>(signing_key: &SigningKey, message: &'a [u8]) -> SignedPayl
 
     let verifying_key = signing_key.verifying_key();
     let encoded = verifying_key.to_encoded_point(false);
-    // Drop the SEC1 0x04 prefix; Ethereum hashes only the 64-byte x||y body.
-    let pubkey: [u8; SECP256K1_PUBKEY_SIZE] = encoded.as_bytes()[1..65].try_into().unwrap();
-    let address = eth_address_from_pubkey(&pubkey);
+    let pubkey: [u8; SECP256K1_UNCOMPRESSED_PUBKEY_SIZE] = encoded.as_bytes().try_into().unwrap();
+    let address = eth_address_from_sec1_pubkey(&pubkey).unwrap();
 
     SignedPayload {
         signature,
@@ -82,11 +82,7 @@ pub(crate) fn signed_instruction(messages: &[&[u8]]) -> Vec<u8> {
 
 /// Parses and returns the first `SecpSignatureOffsets` entry from `instruction`.
 pub(crate) fn first_offsets(instruction: &[u8]) -> SecpSignatureOffsets {
-    read_offsets(&instruction[1..1 + SIGNATURE_OFFSETS_SERIALIZED_SIZE])
-}
-
-/// Deserializes the 11-byte little-endian wire format.
-fn read_offsets(input: &[u8]) -> SecpSignatureOffsets {
+    let input = &instruction[1..1 + SIGNATURE_OFFSETS_SERIALIZED_SIZE];
     SecpSignatureOffsets {
         signature_offset: u16::from_le_bytes(input[0..2].try_into().unwrap()),
         signature_instruction_index: input[2],

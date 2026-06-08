@@ -1,6 +1,6 @@
-# secp256k1: on-chain signature verification for Solana
+# solana-secp256k1-program: on-chain signature verification for Solana
 
-A minimal Solana SBF program that re-verifies secp256k1 ECDSA signatures
+A minimal Solana SBF program that verifies secp256k1 ECDSA signatures
 on-chain without adding any new runtime syscalls.
 
 ## Motivation
@@ -15,7 +15,7 @@ The program is intended to run only as a transaction-level instruction. It
 rejects cross-program invocations (CPI) using `sol_get_stack_height()` so that
 programs cannot treat this verifier as a CPI authorization oracle.
 
-[secp256k1 precompile]: https://docs.solanalabs.com/runtime/programs#secp256k1-program
+[secp256k1 precompile]: https://solana.com/docs/core/programs/precompiles#verify-secp256k1-recovery
 
 ## Syscalls used
 
@@ -35,7 +35,7 @@ Verification relies only on existing Solana runtime syscalls:
 [1 + 11*N ..]         payload: signatures, addresses, messages (order flexible)
 ```
 
-Each 11-byte offset record matches `solana_secp256k1_program::SecpSignatureOffsets`:
+Each 11-byte offset record matches `SecpSignatureOffsets` exposed by this crate:
 
 ```text
 [0..2]    signature_offset        - byte position of 64-byte r||s + 1-byte recovery id
@@ -52,8 +52,11 @@ Each 11-byte offset record matches `solana_secp256k1_program::SecpSignatureOffse
 - **All instruction-index fields must be `0`.** An SBF program receives only
   its own instruction data; cross-instruction references require a future
   runtime change.
-- **Recovery id must be `0`–`3`.** Ethereum-style `27`/`28` offsets are
-  rejected at the wire level.
+- **Recovery id must be `0`–`3`.** Values `2`/`3` are accepted for
+  compatibility with legacy Solana secp256k1 instruction data and are passed
+  through to recovery, where overflowing signatures generally fail as
+  `InvalidArgument`. Ethereum-style `27`/`28` offsets are rejected at the wire
+  level.
 - **Zero-signature payloads** (`count == 0`) are accepted only when the buffer
   is exactly 1 byte. Any trailing bytes are treated as malformed.
 - **No accounts.** The program takes no account arguments and returns
@@ -75,17 +78,29 @@ signatures to fail.
 
 | Feature | Default | Description |
 |---|---|---|
+| `bincode` | off | Enables SDK-compatible instruction construction helpers. |
+| `dev-context-only-utils` | off | Backward-compatible alias for `bincode`, matching the upstream helper crate feature. |
 | `no-entrypoint` | off | Omits the program entrypoint; use when embedding the crate in another program or in tests that call `process_instruction` directly. |
 | `custom-heap` | off | Reserved for callers that provide a custom heap allocator. |
+| `serde` | off | Derives serde traits for `SecpSignatureOffsets`. |
 
 ## Public API
 
-`eth_address_from_pubkey` is re-exported from `solana_secp256k1_program` for
-convenience:
+The SDK helpers and layout constants are exposed from `solana_secp256k1_program`:
 
 ```rust
-pub use solana_secp256k1_program::eth_address_from_pubkey;
+use solana_secp256k1_program::{
+    eth_address_from_pubkey, eth_address_from_sec1_pubkey,
+    new_secp256k1_instruction_with_signature, try_new_secp256k1_instruction_with_signature,
+    SecpSignatureOffsets,
+};
 ```
+
+`new_secp256k1_instruction_with_signature` keeps the upstream SDK return type
+(`Instruction`) for source compatibility. Prefer
+`try_new_secp256k1_instruction_with_signature` when callers need construction
+errors instead of panics for invalid offsets, oversized messages, or invalid
+recovery ids.
 
 ## Build and test
 
@@ -95,27 +110,28 @@ also require the nightly Rust chain `nightly-2026-01-22` (`clippy`,
 
 ```sh
 # Unit tests (host, no SBF toolchain required)
-cargo test
+cargo test --manifest-path program/Cargo.toml
 
 # SBF build only
-cargo build-sbf
+cargo build-sbf --no-rustup-override --arch v3 --manifest-path program/Cargo.toml
 
 # SBF build via Makefile
-make build-sbf-secp256k1
+make build-sbf-program
 
 # Host unit tests, then SBF integration tests via Mollusk
-make test-secp256k1
+make test-program
 
 # Print Mollusk compute-unit measurements for the SBF program
-make cu-secp256k1
+make cu-program
 
 # Lint / format
-make clippy-secp256k1
-make format-check-secp256k1
+make clippy-program
+make format-check-program
 ```
 
-The Mollusk tests in `tests/mollusk.rs` execute the built
-`target/deploy/secp256k1.so` artifact and report `compute_units_consumed` for
-one-signature and two-signature verification paths. Plain `cargo test` still
-runs the host tests without requiring the SBF Rust chain; the Mollusk tests skip
-themselves unless `cargo test-sbf` sets `SBF_OUT_DIR`.
+The Mollusk tests in `program/tests/mollusk.rs` execute the built
+`target/deploy/solana_secp256k1_program.so` artifact and report
+`compute_units_consumed` for one-signature and two-signature verification
+paths. Plain `cargo test --manifest-path program/Cargo.toml` still runs the
+host tests without requiring the SBF Rust chain; the Mollusk tests skip
+themselves unless `SBF_OUT_DIR` is set.

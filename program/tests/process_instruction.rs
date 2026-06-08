@@ -1,9 +1,9 @@
 use {
     common::{first_offsets, signed_instruction, write_offsets},
-    secp256k1::process_instruction,
+    k256::ecdsa::Signature,
     solana_program_error::ProgramError,
     solana_pubkey::Pubkey,
-    solana_secp256k1_program::{DATA_START, SIGNATURE_SERIALIZED_SIZE},
+    solana_secp256k1_program::{process_instruction, DATA_START, SIGNATURE_SERIALIZED_SIZE},
 };
 
 mod common;
@@ -107,6 +107,24 @@ fn rejects_invalid_recovery_ids() {
             Err(ProgramError::InvalidInstructionData)
         );
     }
+}
+
+#[test]
+fn accepts_malleable_high_s_signature() {
+    let program_id = Pubkey::default();
+    let mut instruction = signed_instruction(&[b"hello secp256k1"]);
+    let offsets = first_offsets(&instruction);
+    let signature_start = usize::from(offsets.signature_offset);
+    let signature_end = signature_start + SIGNATURE_SERIALIZED_SIZE;
+    let signature = Signature::from_slice(&instruction[signature_start..signature_end]).unwrap();
+    let (r, s) = signature.split_scalars();
+    let malleable_signature = Signature::from_scalars(r, -s).unwrap();
+
+    assert!(malleable_signature.normalize_s().is_some());
+    instruction[signature_start..signature_end].copy_from_slice(&malleable_signature.to_bytes());
+    instruction[signature_end] ^= 1;
+
+    assert_eq!(process_instruction(&program_id, &[], &instruction), Ok(()));
 }
 
 #[test]
