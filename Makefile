@@ -5,6 +5,7 @@ SBF_ARCH = v2
 nightly = +${RUST_TOOLCHAIN_NIGHTLY}
 
 make-path = $(if $(filter program secp256k1,$1),program,$1)
+make-so = $(if $(filter program secp256k1,$1),solana_secp256k1_program,$1)
 
 rust-toolchain-nightly:
 	@echo ${RUST_TOOLCHAIN_NIGHTLY}
@@ -45,11 +46,18 @@ build-doc-%:
 build-sbf-%:
 	cargo build-sbf --arch $(SBF_ARCH) --manifest-path $(call make-path,$*)/Cargo.toml -- --locked $(ARGS)
 
-test-%: build-sbf-%
-	SBF_OUT_DIR=$(PWD)/target/deploy cargo test \
-		--locked \
-		--manifest-path $(call make-path,$*)/Cargo.toml \
-		$(ARGS)
+test-%:
+	@if [ -f target/deploy/$(call make-so,$*).so ]; then \
+		SBF_OUT_DIR=$(PWD)/target/deploy cargo test \
+			--locked \
+			--manifest-path $(call make-path,$*)/Cargo.toml \
+			$(ARGS); \
+	else \
+		cargo test \
+			--locked \
+			--manifest-path $(call make-path,$*)/Cargo.toml \
+			$(ARGS); \
+	fi
 
 cu-secp256k1: build-sbf-secp256k1
 	SBF_OUT_DIR=$(PWD)/target/deploy cargo test \
