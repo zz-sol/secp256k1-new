@@ -4,7 +4,7 @@ SBF_ARCH = v2
 
 nightly = +${RUST_TOOLCHAIN_NIGHTLY}
 
-make-path = $(if $(filter program secp256k1,$1),.,$1)
+make-path = $(if $(filter program secp256k1,$1),program,$1)
 
 rust-toolchain-nightly:
 	@echo ${RUST_TOOLCHAIN_NIGHTLY}

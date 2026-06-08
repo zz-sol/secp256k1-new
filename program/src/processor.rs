@@ -13,12 +13,38 @@ use {
     solana_secp256k1_recover::secp256k1_recover,
 };
 
+#[cfg(target_os = "solana")]
+use solana_define_syscall::definitions::sol_get_stack_height;
+
 /// Transaction index of the instruction whose data this program is verifying.
 ///
 /// An SBF program only receives its own instruction data, so all offset fields
 /// in `SecpSignatureOffsets` must reference index 0. Supporting other indices
 /// would require a runtime change to expose sibling instruction data.
 const CURRENT_INSTRUCTION_INDEX: u8 = 0;
+
+/// Stack height of a transaction-level instruction. CPI frames are higher.
+pub(crate) const TRANSACTION_LEVEL_STACK_HEIGHT: u64 = 1;
+
+#[cfg(target_os = "solana")]
+pub(crate) fn current_stack_height() -> u64 {
+    // Runtime-provided zero-argument syscall.
+    unsafe { sol_get_stack_height() }
+}
+
+#[cfg(not(target_os = "solana"))]
+pub(crate) fn current_stack_height() -> u64 {
+    TRANSACTION_LEVEL_STACK_HEIGHT
+}
+
+pub(crate) fn reject_cpi_stack_height(stack_height: u64) -> ProgramResult {
+    if stack_height > TRANSACTION_LEVEL_STACK_HEIGHT {
+        return Err(ProgramError::InvalidArgument);
+    }
+
+    Ok(())
+}
+
 const SIGNATURE_SCALAR_LENGTH: usize = 32;
 const SECP256K1_ORDER: [u8; SIGNATURE_SCALAR_LENGTH] = [
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe,
@@ -42,13 +68,16 @@ pub(crate) fn verify_secp256k1_instruction(instruction_data: &[u8]) -> ProgramRe
 /// Program entry point.
 ///
 /// Expects no accounts and instruction data in the secp256k1 precompile
-/// format. Returns [`ProgramError::InvalidArgument`] if any accounts are
-/// provided, or propagates errors from signature verification.
+/// format. Returns [`ProgramError::InvalidArgument`] if invoked through CPI or
+/// if any accounts are provided, or propagates errors from signature
+/// verification.
 pub fn process_instruction(
     _program_id: &Pubkey,
     accounts: &[AccountInfo],
     instruction_data: &[u8],
 ) -> ProgramResult {
+    reject_cpi_stack_height(current_stack_height())?;
+
     if !accounts.is_empty() {
         return Err(ProgramError::InvalidArgument);
     }
@@ -114,6 +143,27 @@ fn normalize_malleable_signature<'a>(
         (normalized_signature, recovery_id ^ 1)
     } else {
         (signature, recovery_id)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_transaction_level_stack_height() {
+        assert_eq!(
+            reject_cpi_stack_height(TRANSACTION_LEVEL_STACK_HEIGHT),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn rejects_cpi_stack_height() {
+        assert_eq!(
+            reject_cpi_stack_height(TRANSACTION_LEVEL_STACK_HEIGHT + 1),
+            Err(ProgramError::InvalidArgument)
+        );
     }
 }
 

@@ -16,6 +16,7 @@ bincode = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 serde_derive = { workspace = true, optional = true }
 solana-account-info = { workspace = true }
+solana-define-syscall = { workspace = true }
 solana-keccak-hasher = { workspace = true }
 solana-instruction = { workspace = true, optional = true }
 solana-program-entrypoint = { workspace = true }
