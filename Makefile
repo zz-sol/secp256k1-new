@@ -4,7 +4,7 @@ SBF_ARCH = v2
 
 nightly = +${RUST_TOOLCHAIN_NIGHTLY}
 
-make-path = $(if $(filter secp256k1,$1),.,$1)
+make-path = $(if $(filter program secp256k1,$1),.,$1)
 
 rust-toolchain-nightly:
 	@echo ${RUST_TOOLCHAIN_NIGHTLY}
@@ -45,9 +45,7 @@ build-doc-%:
 build-sbf-%:
 	cargo build-sbf --arch $(SBF_ARCH) --manifest-path $(call make-path,$*)/Cargo.toml -- --locked $(ARGS)
 
-test-%:
-	@test -f target/deploy/secp256k1.so || \
-		(echo "SBF artifact not found: run make build-sbf-$* first" >&2; exit 1)
+test-%: build-sbf-%
 	SBF_OUT_DIR=$(PWD)/target/deploy cargo test \
 		--locked \
 		--manifest-path $(call make-path,$*)/Cargo.toml \
