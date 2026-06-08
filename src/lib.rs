@@ -2,7 +2,7 @@
 //!
 //! The native [`secp256k1` precompile] already validates signatures at the
 //! transaction level, but this program performs an additional in-program
-//! verification so that other programs can CPI into it and trust the result.
+//! verification from a transaction-level instruction. CPI is rejected.
 //!
 //! # Instruction format
 //!
@@ -21,6 +21,8 @@
 //! [`secp256k1` precompile]: https://docs.solanalabs.com/runtime/programs#secp256k1-program
 
 use solana_account_info::AccountInfo;
+#[cfg(target_os = "solana")]
+use solana_define_syscall::definitions::sol_get_stack_height;
 use solana_keccak_hasher::hash;
 use solana_program_entrypoint::ProgramResult;
 use solana_program_error::ProgramError;
@@ -50,6 +52,31 @@ pub extern "C" fn abort() -> ! {
 /// would require a runtime change to expose sibling instruction data.
 const CURRENT_INSTRUCTION_INDEX: u8 = 0;
 
+/// Stack height of a transaction-level instruction. 
+// stack height 1: this program was called directly by the transaction
+// stack height 2: this program was invoked by another program via CPI
+// stack height 3+: nested CPI
+const TRANSACTION_LEVEL_STACK_HEIGHT: u64 = 1;
+
+#[cfg(target_os = "solana")]
+fn current_stack_height() -> u64 {
+    // Runtime-provided zero-argument syscall.
+    unsafe { sol_get_stack_height() }
+}
+
+#[cfg(not(target_os = "solana"))]
+fn current_stack_height() -> u64 {
+    TRANSACTION_LEVEL_STACK_HEIGHT
+}
+
+fn reject_cpi_stack_height(stack_height: u64) -> ProgramResult {
+    if stack_height > TRANSACTION_LEVEL_STACK_HEIGHT {
+        return Err(ProgramError::InvalidArgument);
+    }
+
+    Ok(())
+}
+
 /// Returns `true` when every offset field in `offsets` references the current
 /// instruction (index 0) rather than a sibling instruction in the transaction.
 fn references_current_instruction(offsets: &SecpSignatureOffsets) -> bool {
@@ -71,13 +98,16 @@ fn verify_secp256k1_instruction(instruction_data: &[u8]) -> ProgramResult {
 /// Program entry point.
 ///
 /// Expects no accounts and instruction data in the secp256k1 precompile
-/// format. Returns [`ProgramError::InvalidArgument`] if any accounts are
-/// provided, or propagates errors from signature verification.
+/// format. Returns [`ProgramError::InvalidArgument`] if invoked through CPI or
+/// if any accounts are provided, or propagates errors from signature
+/// verification.
 pub fn process_instruction(
     _program_id: &Pubkey,
     accounts: &[AccountInfo],
     instruction_data: &[u8],
 ) -> ProgramResult {
+    reject_cpi_stack_height(current_stack_height())?;
+
     if !accounts.is_empty() {
         return Err(ProgramError::InvalidArgument);
     }
@@ -119,4 +149,25 @@ fn verify_signature_fields(fields: &SignatureFields) -> ProgramResult {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_transaction_level_stack_height() {
+        assert_eq!(
+            reject_cpi_stack_height(TRANSACTION_LEVEL_STACK_HEIGHT),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn rejects_cpi_stack_height() {
+        assert_eq!(
+            reject_cpi_stack_height(TRANSACTION_LEVEL_STACK_HEIGHT + 1),
+            Err(ProgramError::InvalidArgument)
+        );
+    }
 }

@@ -1700,6 +1700,7 @@ dependencies = [
  "mollusk-svm",
  "solana-account-info",
  "solana-address 2.6.0",
+ "solana-define-syscall 4.0.1",
  "solana-instruction",
  "solana-keccak-hasher 3.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-program-entrypoint",

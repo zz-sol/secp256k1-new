@@ -11,10 +11,9 @@ format is intentionally identical to the precompile, including parts that are
 not intuitive for general-purpose use, so that tools and clients built around
 the precompile require no changes.
 
-Being a regular SBF program also unlocks CPI: another program can invoke this
-one and act on the explicit pass/fail result, rather than relying on
-`sysvar::instructions` inspection to confirm a parallel precompile instruction
-succeeded.
+The program is intended to run only as a transaction-level instruction. It
+rejects cross-program invocations (CPI) using `sol_get_stack_height()` so that
+programs cannot treat this verifier as a CPI authorization oracle.
 
 [secp256k1 precompile]: https://docs.solanalabs.com/runtime/programs#secp256k1-program
 
@@ -26,6 +25,7 @@ Verification relies only on existing Solana runtime syscalls:
 |---|---|
 | `sol_keccak256` | `solana_keccak_hasher::hash` |
 | `sol_secp256k1_recover` | `solana_secp256k1_recover::secp256k1_recover` |
+| `sol_get_stack_height` | `solana_define_syscall::definitions::sol_get_stack_height` |
 
 ## Instruction format
 
@@ -58,6 +58,8 @@ Each 11-byte offset record matches `solana_secp256k1_program::SecpSignatureOffse
   is exactly 1 byte. Any trailing bytes are treated as malformed.
 - **No accounts.** The program takes no account arguments and returns
   `InvalidArgument` if any are supplied.
+- **No CPI.** The program returns `InvalidArgument` when stack height is greater
+  than the transaction-level height (`1`).
 
 ### Hashing
 
