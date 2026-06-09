@@ -172,9 +172,21 @@ pub use instruction::{
 pub use processor::process_instruction;
 
 #[cfg(target_os = "solana")]
+use solana_program_entrypoint::ProgramResult;
+#[cfg(target_os = "solana")]
 use solana_program_error::ProgramError;
 
 /// Program entry point for the version 2 instruction-data pointer interface.
+#[cfg(all(target_os = "solana", not(feature = "no-entrypoint")))]
+#[unsafe(no_mangle)]
+pub extern "C" fn entrypoint(input: *mut u8, instruction_data_addr: *const u8) -> u64 {
+    match unsafe { process_entrypoint(input, instruction_data_addr) } {
+        Ok(()) => solana_program_entrypoint::SUCCESS,
+        Err(error) => error.into(),
+    }
+}
+
+/// Processes the version 2 instruction-data pointer interface.
 ///
 /// # Safety
 ///
@@ -182,35 +194,25 @@ use solana_program_error::ProgramError;
 /// `instruction_data_addr` as the pointer to instruction data with its length
 /// stored in the preceding 8 bytes.
 #[cfg(all(target_os = "solana", not(feature = "no-entrypoint")))]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn entrypoint(input: *mut u8, instruction_data_addr: *const u8) -> u64 {
-    let result = unsafe {
-        if processor::in_cpi() {
-            Err(ProgramError::InvalidArgument)
-        } else {
-            let num_accounts = *(input as *const u64);
-            if num_accounts != 0 {
-                Err(ProgramError::InvalidArgument)
-            } else {
-                let Some(instruction_data_len_addr) =
-                    (instruction_data_addr as usize).checked_sub(core::mem::size_of::<u64>())
-                else {
-                    return ProgramError::InvalidInstructionData.into();
-                };
-                let instruction_data_len = *(instruction_data_len_addr as *const u64);
-                let instruction_data = core::slice::from_raw_parts(
-                    instruction_data_addr,
-                    instruction_data_len as usize,
-                );
-                processor::verify_secp256k1_instruction(instruction_data)
-            }
-        }
+unsafe fn process_entrypoint(input: *mut u8, instruction_data_addr: *const u8) -> ProgramResult {
+    if processor::in_cpi() {
+        return Err(ProgramError::InvalidArgument);
+    }
+
+    let num_accounts = unsafe { *(input as *const u64) };
+    if num_accounts != 0 {
+        return Err(ProgramError::InvalidArgument);
+    }
+
+    let instruction_data_len_addr = (instruction_data_addr as usize)
+        .checked_sub(core::mem::size_of::<u64>())
+        .ok_or(ProgramError::InvalidInstructionData)?;
+    let instruction_data_len = unsafe { *(instruction_data_len_addr as *const u64) };
+    let instruction_data = unsafe {
+        core::slice::from_raw_parts(instruction_data_addr, instruction_data_len as usize)
     };
 
-    match result {
-        Ok(()) => solana_program_entrypoint::SUCCESS,
-        Err(error) => error.into(),
-    }
+    processor::verify_secp256k1_instruction(instruction_data)
 }
 
 #[cfg(not(feature = "no-entrypoint"))]
