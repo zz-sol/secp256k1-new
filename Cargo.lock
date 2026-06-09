@@ -2451,7 +2451,6 @@ dependencies = [
  "serde_derive",
  "solana-account-info",
  "solana-address 2.6.1",
- "solana-define-syscall 4.0.1",
  "solana-instruction",
  "solana-keccak-hasher",
  "solana-program-entrypoint",

@@ -13,9 +13,6 @@ use {
     solana_secp256k1_recover::secp256k1_recover,
 };
 
-#[cfg(target_os = "solana")]
-use solana_define_syscall::definitions::sol_get_stack_height;
-
 /// Transaction index of the instruction whose data this program is verifying.
 ///
 /// An SBF program only receives its own instruction data, so all offset fields
@@ -23,26 +20,18 @@ use solana_define_syscall::definitions::sol_get_stack_height;
 /// would require a runtime change to expose sibling instruction data.
 const CURRENT_INSTRUCTION_INDEX: u8 = 0;
 
-/// Stack height of a transaction-level instruction. CPI frames are higher.
-pub(crate) const TRANSACTION_LEVEL_STACK_HEIGHT: u64 = 1;
+pub(crate) fn in_cpi() -> bool {
+    #[cfg(target_os = "solana")]
+    {
+        use solana_instruction::{syscalls::sol_get_stack_height, TRANSACTION_LEVEL_STACK_HEIGHT};
 
-#[cfg(target_os = "solana")]
-pub(crate) fn current_stack_height() -> u64 {
-    // Runtime-provided zero-argument syscall.
-    unsafe { sol_get_stack_height() }
-}
-
-#[cfg(not(target_os = "solana"))]
-pub(crate) fn current_stack_height() -> u64 {
-    TRANSACTION_LEVEL_STACK_HEIGHT
-}
-
-pub(crate) fn reject_cpi_stack_height(stack_height: u64) -> ProgramResult {
-    if stack_height > TRANSACTION_LEVEL_STACK_HEIGHT {
-        return Err(ProgramError::InvalidArgument);
+        unsafe { sol_get_stack_height() as usize > TRANSACTION_LEVEL_STACK_HEIGHT }
     }
 
-    Ok(())
+    #[cfg(not(target_os = "solana"))]
+    {
+        false
+    }
 }
 
 const SIGNATURE_SCALAR_LENGTH: usize = 32;
@@ -76,7 +65,9 @@ pub fn process_instruction(
     accounts: &[AccountInfo],
     instruction_data: &[u8],
 ) -> ProgramResult {
-    reject_cpi_stack_height(current_stack_height())?;
+    if in_cpi() {
+        return Err(ProgramError::InvalidArgument);
+    }
 
     if !accounts.is_empty() {
         return Err(ProgramError::InvalidArgument);
@@ -170,18 +161,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn accepts_transaction_level_stack_height() {
-        assert_eq!(
-            reject_cpi_stack_height(TRANSACTION_LEVEL_STACK_HEIGHT),
-            Ok(())
-        );
-    }
-
-    #[test]
-    fn rejects_cpi_stack_height() {
-        assert_eq!(
-            reject_cpi_stack_height(TRANSACTION_LEVEL_STACK_HEIGHT + 1),
-            Err(ProgramError::InvalidArgument)
-        );
+    fn host_is_not_in_cpi() {
+        assert!(!in_cpi());
     }
 }

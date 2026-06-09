@@ -185,25 +185,24 @@ use solana_program_error::ProgramError;
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn entrypoint(input: *mut u8, instruction_data_addr: *const u8) -> u64 {
     let result = unsafe {
-        match processor::reject_cpi_stack_height(processor::current_stack_height()) {
-            Err(error) => Err(error),
-            Ok(()) => {
-                let num_accounts = *(input as *const u64);
-                if num_accounts != 0 {
-                    Err(ProgramError::InvalidArgument)
-                } else {
-                    let Some(instruction_data_len_addr) =
-                        (instruction_data_addr as usize).checked_sub(core::mem::size_of::<u64>())
-                    else {
-                        return ProgramError::InvalidInstructionData.into();
-                    };
-                    let instruction_data_len = *(instruction_data_len_addr as *const u64);
-                    let instruction_data = core::slice::from_raw_parts(
-                        instruction_data_addr,
-                        instruction_data_len as usize,
-                    );
-                    processor::verify_secp256k1_instruction(instruction_data)
-                }
+        if processor::in_cpi() {
+            Err(ProgramError::InvalidArgument)
+        } else {
+            let num_accounts = *(input as *const u64);
+            if num_accounts != 0 {
+                Err(ProgramError::InvalidArgument)
+            } else {
+                let Some(instruction_data_len_addr) =
+                    (instruction_data_addr as usize).checked_sub(core::mem::size_of::<u64>())
+                else {
+                    return ProgramError::InvalidInstructionData.into();
+                };
+                let instruction_data_len = *(instruction_data_len_addr as *const u64);
+                let instruction_data = core::slice::from_raw_parts(
+                    instruction_data_addr,
+                    instruction_data_len as usize,
+                );
+                processor::verify_secp256k1_instruction(instruction_data)
             }
         }
     };
